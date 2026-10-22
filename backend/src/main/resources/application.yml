@@ -1,0 +1,74 @@
+server:
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: never
+spring:
+  application:
+    name: obd-ai-diagnostic-center
+  datasource:
+    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/obd_ai?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DATABASE_USER:obd}
+    password: ${DATABASE_PASSWORD:obd_local}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: 4
+      connection-timeout: 30000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: false
+  flyway:
+    enabled: true
+    validate-on-migrate: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      connect-timeout: 1500ms
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+springdoc:
+  swagger-ui:
+    path: /docs
+  api-docs:
+    path: /openapi
+obd:
+  security:
+    jwt-secret: ${JWT_SECRET:}
+    access-minutes: 15
+    refresh-days: 30
+    secure-cookie: ${SECURE_COOKIE:false}
+    allowed-origins: ${ALLOWED_ORIGINS:http://localhost:5173}
+  diagnostics:
+    provider-url: ${OBD_DIAGNOSTIC_PROVIDER_URL:}
+    provider-urls: ${OBD_DIAGNOSTIC_PROVIDER_URLS:}
+    provider-api-key: ${OBD_DIAGNOSTIC_PROVIDER_API_KEY:}
+    cache-days: 7
+  ai:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${OPENAI_MODEL:gpt-4.1-mini}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+  vin:
+    base-url: https://vpic.nhtsa.dot.gov/api
+  limits:
+    free-scans-per-month: 10
+    request-per-minute: 120
+  storage:
+    directory: ${UPLOAD_DIRECTORY:./data/uploads}

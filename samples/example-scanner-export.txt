@@ -1,0 +1,5 @@
+OBD-II scanner export (synthetic example)
+Vehicle: Example vehicle
+Odometer: 102350 mi
+Stored trouble codes: P0300, P0171
+Status: Check engine light on
