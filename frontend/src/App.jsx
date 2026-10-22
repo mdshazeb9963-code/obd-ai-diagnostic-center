@@ -127,27 +127,28 @@ function Brand() {
 }
 
 function Sidebar({ active, onChange, onLogout, mobile, user, subscription, demoMode = false }) {
+  const visibleItems = demoMode ? navItems.filter(({ id }) => ['home', 'upload', 'garage', 'reports'].includes(id)) : navItems
   return <aside className={cx('sidebar', mobile && 'sidebar-open')}>
     <div className="sidebar-top"><Brand /><button className="sidebar-close icon-button" aria-label="Close navigation" onClick={() => onChange(active)}><X size={18} /></button></div>
     <div className="workspace-label">WORKSPACE <span>● {demoMode ? 'DEMO' : 'PERSONAL'}</span></div>
     <nav aria-label="Main navigation">
-      {navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => onChange(id)} className={cx('nav-item', active === id && 'nav-active')} aria-current={active === id ? 'page' : undefined}><Icon size={18} strokeWidth={1.8} /><span>{demoMode && id === 'assistant' ? 'Demo guidance' : label}</span>{id === 'upload' && <span className="nav-plus" aria-hidden="true">+</span>}</button>)}
+      {visibleItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => onChange(id)} className={cx('nav-item', active === id && 'nav-active')} aria-current={active === id ? 'page' : undefined}><Icon size={18} strokeWidth={1.8} /><span>{demoMode && id === 'upload' ? 'Upload a scan' : demoMode && id === 'home' ? 'Home' : label}</span>{id === 'upload' && <span className="nav-plus" aria-hidden="true">+</span>}</button>)}
       {user?.role === 'ADMIN' && <button className={cx('nav-item', active === 'admin' && 'nav-active')} onClick={() => onChange('admin')}><Settings size={18}/><span>Admin panel</span></button>}
     </nav>
-    <div className="sidebar-divider" />
-    <div className="workspace-label">PREFERENCES</div>
-    <nav aria-label="Preferences">
-      <button className={cx('nav-item', active === 'notifications' && 'nav-active')} onClick={() => onChange('notifications')}><Bell size={18} /><span>Notifications</span></button>
-      <button className={cx('nav-item', active === 'settings' && 'nav-active')} onClick={() => onChange('settings')}><Settings size={18} /><span>Account settings</span></button>
-    </nav>
+    {!demoMode && <><div className="sidebar-divider" />
+      <div className="workspace-label">PREFERENCES</div>
+      <nav aria-label="Preferences">
+        <button className={cx('nav-item', active === 'notifications' && 'nav-active')} onClick={() => onChange('notifications')}><Bell size={18} /><span>Notifications</span></button>
+        <button className={cx('nav-item', active === 'settings' && 'nav-active')} onClick={() => onChange('settings')}><Settings size={18} /><span>Account settings</span></button>
+      </nav></>}
     <div className="sidebar-spacer" />
-    <button className="plan-card plan-card-button" onClick={() => onChange('settings')}><div className="plan-icon"><Zap size={15} fill="currentColor" /></div><div><strong>{demoMode ? 'Browser demo' : `${subscription?.planCode || 'Plan'} workspace`}</strong><small>{demoMode ? `${subscription?.scansUsed || 0} scans saved on this device` : subscription ? subscription.scansUsed+' / '+(subscription.scanLimit<0?'∞':subscription.scanLimit)+' scans this month' : 'View plan and usage'}</small></div><ArrowRight size={14} /></button>
-    <div className="profile-row"><div className="avatar">{demoMode ? 'DE' : 'OD'}</div><div className="profile-copy"><strong>{demoMode ? 'Guest demo' : 'My account'}</strong><small>{demoMode ? 'Saved in this browser' : 'Personal workspace'}</small></div>{!demoMode && <button className="icon-button" aria-label="Sign out" onClick={onLogout}><LogOut size={16} /></button>}</div>
+    {demoMode ? <div className="demo-sidebar-note"><span className="demo-sidebar-dot" />No login · Saved on this device</div> : <><button className="plan-card plan-card-button" onClick={() => onChange('settings')}><div className="plan-icon"><Zap size={15} fill="currentColor" /></div><div><strong>{`${subscription?.planCode || 'Plan'} workspace`}</strong><small>{subscription ? subscription.scansUsed+' / '+(subscription.scanLimit<0?'∞':subscription.scanLimit)+' scans this month' : 'View plan and usage'}</small></div><ArrowRight size={14} /></button>
+      <div className="profile-row"><div className="avatar">OD</div><div className="profile-copy"><strong>My account</strong><small>Personal workspace</small></div><button className="icon-button" aria-label="Sign out" onClick={onLogout}><LogOut size={16} /></button></div></>}
   </aside>
 }
 
 function Topbar({ onMenu, onNavigate, demoMode = false }) {
-  return <header className="topbar"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={onMenu}><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>Diagnostic center</strong></div><div className="topbar-actions"><div className="system-live"><span /> {demoMode ? 'Browser demo' : 'Private workspace'}</div><button className="top-icon" aria-label="Search reports" title="Search reports" onClick={() => onNavigate('reports')}><Search size={17} /></button><button className="top-icon notification-icon" aria-label="Notifications" title="Notifications" onClick={() => onNavigate('notifications')}><Bell size={17} /><i /></button><button className="top-avatar top-avatar-button" aria-label="Account settings" onClick={() => onNavigate('settings')}>{demoMode ? 'DE' : 'OD'}</button></div></header>
+  return <header className="topbar"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={onMenu}><Menu size={20} /></button><div className="breadcrumbs">{demoMode ? <strong>OBD AI · Browser demo</strong> : <><span>Workspace</span><span className="crumb-slash">/</span><strong>Diagnostic center</strong></>}</div><div className="topbar-actions">{demoMode ? <div className="system-live"><span /> Saved on this device</div> : <><div className="system-live"><span /> Private workspace</div><button className="top-icon" aria-label="Search reports" title="Search reports" onClick={() => onNavigate('reports')}><Search size={17} /></button><button className="top-icon notification-icon" aria-label="Notifications" title="Notifications" onClick={() => onNavigate('notifications')}><Bell size={17} /><i /></button><button className="top-avatar top-avatar-button" aria-label="Account settings" onClick={() => onNavigate('settings')}>OD</button></>}</div></header>
 }
 
 function Overview({ onNavigate, demoMode = false }) {
@@ -158,17 +159,18 @@ function Overview({ onNavigate, demoMode = false }) {
   const reports = Array.isArray(reportsQuery.data) ? reportsQuery.data : reportsQuery.data?.items || []
   const vehicles = Array.isArray(vehiclesQuery.data) ? vehiclesQuery.data : vehiclesQuery.data?.items || []
   const latest = reports[0]
-  const urgent = (latest?.diagnostics || []).filter((d) => ['HIGH', 'CRITICAL'].includes(d.severity)).length
+  const urgent = demoMode ? null : (latest?.diagnostics || []).filter((d) => ['HIGH', 'CRITICAL'].includes(d.severity)).length
   const scoredReports = reports.filter((r) => r.healthScore != null)
   const average = scoredReports.length ? Math.round(scoredReports.reduce((sum, r) => sum + r.healthScore, 0) / scoredReports.length) : null
+  if (demoMode) return <DemoOverview reports={reports} loading={reportsQuery.isLoading} error={reportsQuery.isError} sample={sample} onNavigate={onNavigate} />
   return <div className="content">
     <div className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-dot" /> {demoMode ? 'NO ACCOUNT NEEDED' : 'YOUR GARAGE AT A GLANCE'}</div><h1>{demoMode ? 'Explore the diagnostic center.' : 'Good to have you back.'}</h1><p>{demoMode ? 'Upload your own text scan or try the sample report.' : 'Here’s what’s happening across your vehicles.'}</p></div><div className="welcome-actions">{demoMode && <button className="button button-secondary" onClick={() => sample.mutate()} disabled={sample.isPending}>{sample.isPending ? <span className="spinner" /> : <FileText size={15} />} Try sample scan</button>}<button className="button button-primary" onClick={() => onNavigate('upload')}><Upload size={16} /> Run a diagnostic</button></div></div>
     {(reportsQuery.isError || vehiclesQuery.isError) && <InlineError message="Your workspace data could not be loaded. Check your connection, then refresh." />}
     <div className="metric-grid">
-      <MetricCard icon={CarFront} label="Vehicles in garage" value={vehiclesQuery.isLoading ? '—' : vehicles.length} note="Saved to your workspace" tone="green" />
+      <MetricCard icon={CarFront} label="Vehicles in garage" value={vehiclesQuery.isLoading ? '—' : vehicles.length} note={demoMode ? 'Saved in this browser' : 'Saved to your workspace'} tone="green" />
       <MetricCard icon={Activity} label="Scans completed" value={reportsQuery.isLoading ? '—' : reports.length} note="Diagnostic reports on file" tone="blue" />
-      <MetricCard icon={Gauge} label="Average health" value={average === null ? '—' : average + '%'} note={average === null ? 'Available after your first scan' : 'Across available reports'} tone="amber" />
-      <MetricCard icon={TriangleAlert} label="Needs attention" value={reportsQuery.isLoading ? '—' : urgent} note="High or critical findings" tone={urgent ? 'red' : 'green'} />
+      <MetricCard icon={Gauge} label="Average health" value={average === null ? '—' : average + '%'} note={demoMode ? 'Requires verified provider data' : average === null ? 'Available after your first scan' : 'Across available reports'} tone="amber" />
+      <MetricCard icon={TriangleAlert} label="Needs attention" value={reportsQuery.isLoading || urgent === null ? '—' : urgent} note={demoMode ? 'Requires verified severity data' : 'High or critical findings'} tone={urgent ? 'red' : 'green'} />
     </div>
     <div className="dashboard-grid">
       <section className="panel health-panel"><div className="panel-heading"><div><span className="eyebrow">VEHICLE HEALTH</span><h2>Health over time</h2></div><button className="quiet-button" onClick={() => onNavigate('history')}>View history <ArrowRight size={14} /></button></div>
@@ -182,6 +184,37 @@ function Overview({ onNavigate, demoMode = false }) {
       {reportsQuery.isLoading ? <LoadingRows /> : reports.length ? <ReportTable reports={reports.slice(0, 5)} onOpen={() => onNavigate('reports')} /> : <div className="table-empty"><div className="table-empty-mark"><FileClock size={18} /></div><div><strong>No reports to show</strong><span>Upload an OBD export to create your first diagnostic report.</span></div><button className="button button-secondary" onClick={() => onNavigate('upload')}>Upload a scan <ArrowRight size={15} /></button></div>}
     </section>
     <div className="trust-note"><Shield size={14} /><span>Diagnostic findings are informational. Code descriptions and repair recommendations show their source and confidence when available.</span><button title="Learn about diagnostic confidence"><CircleHelp size={15} /></button></div>
+  </div>
+}
+
+function DemoOverview({ reports, loading, error, sample, onNavigate }) {
+  return <div className="content demo-home">
+    <section className="demo-welcome">
+      <div className="demo-welcome-copy">
+        <span className="eyebrow"><span className="eyebrow-dot" /> FREE BROWSER DEMO</span>
+        <h1>Check your scanner export.</h1>
+        <p>No account or API key needed. Upload a text scan, or try the sample to see how reports work.</p>
+        <div className="demo-welcome-actions">
+          <button className="button button-primary" onClick={() => onNavigate('upload')}><Upload size={16} /> Upload a scan</button>
+          <button className="button button-secondary" onClick={() => sample.mutate()} disabled={sample.isPending}>{sample.isPending ? <span className="spinner" /> : <FileText size={15} />}{sample.isPending ? 'Loading sample…' : 'Try sample report'}</button>
+        </div>
+        {sample.isError && <div className="form-error" role="alert"><TriangleAlert size={16} />The sample could not be loaded. Please try again.</div>}
+      </div>
+      <div className="demo-welcome-art" aria-hidden="true"><div className="demo-art-ring ring-one"/><div className="demo-art-ring ring-two"/><div className="demo-engine"><Activity size={46}/><span>OBD II</span></div><i className="art-dot dot-one"/><i className="art-dot dot-two"/><i className="art-dot dot-three"/></div>
+    </section>
+    <section className="demo-steps" aria-label="How to use the demo">
+      <div><span>1</span><p><strong>Choose a scan</strong><small>TXT, CSV, JSON, XML, or LOG</small></p></div>
+      <ArrowRight className="demo-step-arrow" size={16}/>
+      <div><span>2</span><p><strong>Review extracted codes</strong><small>Parsed in this browser</small></p></div>
+      <ArrowRight className="demo-step-arrow" size={16}/>
+      <div><span>3</span><p><strong>Keep your report</strong><small>Saved on this device</small></p></div>
+    </section>
+    {error && <InlineError message="Your saved scans could not be loaded. Refresh the page and try again." />}
+    <section className="panel demo-recent">
+      <div className="panel-heading"><div><span className="eyebrow">ON THIS DEVICE</span><h2>Your recent scans</h2></div><button className="quiet-button" onClick={() => onNavigate('reports')}>View all <ArrowRight size={14}/></button></div>
+      {loading ? <LoadingRows/> : reports.length ? <ReportTable reports={reports.slice(0, 5)} onOpen={() => onNavigate('reports')}/> : <div className="demo-empty"><div className="table-empty-mark"><FileClock size={18}/></div><div><strong>No scans yet</strong><span>Upload a scanner export or try the sample report to get started.</span></div><button className="button button-secondary" onClick={() => onNavigate('upload')}>Upload a scan <ArrowRight size={15}/></button></div>}
+    </section>
+    <p className="demo-footnote"><Shield size={14}/> This demo extracts code-shaped text only. It does not confirm code meanings, severity, repairs, or safety advice.</p>
   </div>
 }
 
