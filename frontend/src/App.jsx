@@ -22,6 +22,27 @@ const navItems = [
 const cx = (...parts) => parts.filter(Boolean).join(' ')
 const staticPreview = import.meta.env.VITE_STATIC_PREVIEW === 'true'
 
+function preferredSpeechVoice(synthesis) {
+  if (typeof synthesis.getVoices !== 'function') return null
+  let voices
+  try {
+    voices = synthesis.getVoices()
+  } catch {
+    return null
+  }
+  if (!Array.isArray(voices)) return null
+
+  // Prefer a locally available enhanced voice instead of selecting a remote one by name.
+  const englishVoices = voices.filter((voice) => (
+    voice.localService !== false && /^en([-_]|$)/i.test(voice.lang || '')
+  ))
+  return englishVoices.find((voice) => /natural|enhanced|premium|neural/i.test(voice.name || ''))
+    || englishVoices.find((voice) => /^en[-_]us$/i.test(voice.lang || '') && voice.default)
+    || englishVoices.find((voice) => voice.default)
+    || englishVoices[0]
+    || null
+}
+
 function App({ demoMode = staticPreview } = {}) {
   const [token, setToken] = useState(() => demoMode ? 'local-demo' : sessionStorage.getItem('obd.accessToken'))
   const [page, setPage] = useState('home')
@@ -418,14 +439,23 @@ function ReportDetail({ report, onBack, onDownload }) {
     }
 
     synthesis.cancel()
+    const spokenCode = String(finding.code || '').split('').join(' ')
     const text = [
-      `${finding.code}. ${finding.title || 'Diagnostic trouble code.'}`,
+      `Diagnostic code ${spokenCode}. ${finding.title || 'Diagnostic trouble code.'}`,
       finding.description,
       finding.causes?.length ? `Possible causes, not confirmed: ${finding.causes.join('. ')}` : '',
       finding.nextStep ? `What to do next: ${finding.nextStep}` : '',
     ].filter(Boolean).join('. ')
     const utterance = new Utterance(text)
-    utterance.lang = 'en-US'
+    const voice = preferredSpeechVoice(synthesis)
+    if (voice) {
+      utterance.voice = voice
+      utterance.lang = voice.lang
+    } else {
+      utterance.lang = 'en-US'
+    }
+    utterance.rate = 0.94
+    utterance.pitch = 1
     utterance.onend = () => {
       if (utteranceRef.current !== utterance) return
       utteranceRef.current = null

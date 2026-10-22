@@ -97,7 +97,16 @@ describe('OBD AI workspace journeys', () => {
   it('reads only the selected code explanation and lets the mechanic stop or switch playback', async () => {
     const user = userEvent.setup()
     const originalSpeechDescriptor = Object.getOwnPropertyDescriptor(window, 'speechSynthesis')
-    const synthesis = { speak: vi.fn(), cancel: vi.fn() }
+    const enhancedEnglishVoice = { name: 'English Enhanced', lang: 'en-US', localService: true, default: false }
+    const synthesis = {
+      speak: vi.fn(),
+      cancel: vi.fn(),
+      getVoices: vi.fn(() => [
+        { name: 'Remote Natural Voice', lang: 'en-US', localService: false, default: true },
+        { name: 'English Default', lang: 'en-US', localService: true, default: true },
+        enhancedEnglishVoice,
+      ]),
+    }
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: synthesis })
     vi.stubGlobal('SpeechSynthesisUtterance', class MockUtterance {
       constructor(text) { this.text = text }
@@ -133,6 +142,9 @@ describe('OBD AI workspace journeys', () => {
       expect(synthesis.speak).toHaveBeenCalledTimes(1)
       expect(synthesis.speak.mock.calls[0][0].text).toContain('Low or abnormally high battery-positive voltage')
       expect(synthesis.speak.mock.calls[0][0].text).not.toContain('Accumulator low pressure')
+      expect(synthesis.speak.mock.calls[0][0].voice).toBe(enhancedEnglishVoice)
+      expect(synthesis.speak.mock.calls[0][0].rate).toBe(0.94)
+      expect(synthesis.speak.mock.calls[0][0].pitch).toBe(1)
 
       await user.click(accumulatorButton)
       expect(lowVoltageButton).toHaveAttribute('aria-pressed', 'false')
