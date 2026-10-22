@@ -7,7 +7,7 @@ import {
   LayoutDashboard, LockKeyhole, LogOut, Menu, MessageCircle, Search, Settings, Shield,
   Sparkles, Square, Trash2, TriangleAlert, Upload, Volume2, Wrench, X, Zap,
 } from 'lucide-react'
-import { errorMessage, http } from './api.js'
+import { errorMessage, http, translateSpeech } from './api.js'
 import { enrichDiagnostic, inferVehicleMake } from './dtcReference.js'
 
 const navItems = [
@@ -21,8 +21,30 @@ const navItems = [
 
 const cx = (...parts) => parts.filter(Boolean).join(' ')
 const staticPreview = import.meta.env.VITE_STATIC_PREVIEW === 'true'
+const translationApiConfigured = !staticPreview || Boolean((import.meta.env.VITE_TRANSLATION_API_URL || '').trim())
 
-function preferredSpeechVoice(synthesis) {
+const speechLanguages = [
+  { value: 'en', label: 'English', locale: 'en-US' },
+  { value: 'hi', label: 'हिन्दी · Hindi', locale: 'hi-IN' },
+  { value: 'hi-Latn', label: 'Hinglish', locale: 'en-IN' },
+  { value: 'ur', label: 'اردو · Urdu', locale: 'ur-PK' },
+  { value: 'te', label: 'తెలుగు · Telugu', locale: 'te-IN' },
+  { value: 'ta', label: 'தமிழ் · Tamil', locale: 'ta-IN' },
+  { value: 'bn', label: 'বাংলা · Bengali', locale: 'bn-IN' },
+  { value: 'mr', label: 'मराठी · Marathi', locale: 'mr-IN' },
+  { value: 'kn', label: 'ಕನ್ನಡ · Kannada', locale: 'kn-IN' },
+  { value: 'ml', label: 'മലയാളം · Malayalam', locale: 'ml-IN' },
+  { value: 'pa', label: 'ਪੰਜਾਬੀ · Punjabi', locale: 'pa-IN' },
+  { value: 'gu', label: 'ગુજરાતી · Gujarati', locale: 'gu-IN' },
+  { value: 'ar', label: 'العربية · Arabic', locale: 'ar-SA' },
+  { value: 'es', label: 'Español · Spanish', locale: 'es-ES' },
+  { value: 'fr', label: 'Français · French', locale: 'fr-FR' },
+  { value: 'pt', label: 'Português · Portuguese', locale: 'pt-BR' },
+  { value: 'de', label: 'Deutsch · German', locale: 'de-DE' },
+  { value: 'ja', label: '日本語 · Japanese', locale: 'ja-JP' },
+]
+
+function preferredSpeechVoice(synthesis, language = 'en') {
   if (typeof synthesis.getVoices !== 'function') return null
   let voices
   try {
@@ -33,13 +55,13 @@ function preferredSpeechVoice(synthesis) {
   if (!Array.isArray(voices)) return null
 
   // Prefer a locally available enhanced voice instead of selecting a remote one by name.
-  const englishVoices = voices.filter((voice) => (
-    voice.localService !== false && /^en([-_]|$)/i.test(voice.lang || '')
-  ))
-  return englishVoices.find((voice) => /natural|enhanced|premium|neural/i.test(voice.name || ''))
-    || englishVoices.find((voice) => /^en[-_]us$/i.test(voice.lang || '') && voice.default)
-    || englishVoices.find((voice) => voice.default)
-    || englishVoices[0]
+  const locale = speechLanguages.find((item) => item.value === language)?.locale || 'en-US'
+  const languageTag = locale.split('-')[0]
+  const matchingVoices = voices.filter((voice) => voice.localService !== false && new RegExp(`^${languageTag}([-_]|$)`, 'i').test(voice.lang || ''))
+  return matchingVoices.find((voice) => /natural|enhanced|premium|neural/i.test(voice.name || ''))
+    || matchingVoices.find((voice) => (voice.lang || '').replace('_', '-').toLowerCase() === locale.toLowerCase() && voice.default)
+    || matchingVoices.find((voice) => voice.default)
+    || matchingVoices[0]
     || null
 }
 
@@ -411,49 +433,42 @@ function ComparePanel({reports,onBack}) {
 function ReportDetail({ report, onBack, onDownload }) {
   const vehicleMake = report.vehicleMake || inferVehicleMake(`${report.fileName || ''} ${report.vehicleName || ''}`)
   const [speakingId, setSpeakingId] = useState(null)
+  const [translatingId, setTranslatingId] = useState(null)
+  const [speechLanguage, setSpeechLanguage] = useState('en')
   const [speechMessage, setSpeechMessage] = useState(null)
   const utteranceRef = useRef(null)
   const activeSpeechIdRef = useRef(null)
+  const translationAbortRef = useRef(null)
+
+  const stopSpeech = () => {
+    translationAbortRef.current?.abort()
+    translationAbortRef.current = null
+    if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel()
+    utteranceRef.current = null
+    activeSpeechIdRef.current = null
+    setSpeakingId(null)
+    setTranslatingId(null)
+  }
 
   useEffect(() => () => {
+    translationAbortRef.current?.abort()
     if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel()
     utteranceRef.current = null
     activeSpeechIdRef.current = null
   }, [])
 
-  const toggleSpeech = (finding, speechId) => {
+  const speak = (text, finding, speechId, language) => {
     const synthesis = window.speechSynthesis
     const Utterance = window.SpeechSynthesisUtterance
     if (!synthesis || !Utterance) {
       setSpeechMessage({ id: speechId, text: 'Audio playback is not available in this browser.' })
       return
     }
-
-    setSpeechMessage(null)
-    if (activeSpeechIdRef.current === speechId) {
-      synthesis.cancel()
-      utteranceRef.current = null
-      activeSpeechIdRef.current = null
-      setSpeakingId(null)
-      return
-    }
-
-    synthesis.cancel()
-    const spokenCode = String(finding.code || '').split('').join(' ')
-    const text = [
-      `Diagnostic code ${spokenCode}. ${finding.title || 'Diagnostic trouble code.'}`,
-      finding.description,
-      finding.causes?.length ? `Possible causes, not confirmed: ${finding.causes.join('. ')}` : '',
-      finding.nextStep ? `What to do next: ${finding.nextStep}` : '',
-    ].filter(Boolean).join('. ')
     const utterance = new Utterance(text)
-    const voice = preferredSpeechVoice(synthesis)
-    if (voice) {
-      utterance.voice = voice
-      utterance.lang = voice.lang
-    } else {
-      utterance.lang = 'en-US'
-    }
+    const voice = preferredSpeechVoice(synthesis, language)
+    const locale = speechLanguages.find((item) => item.value === language)?.locale || 'en-US'
+    if (voice) utterance.voice = voice
+    utterance.lang = voice?.lang || locale
     utterance.rate = 0.94
     utterance.pitch = 1
     utterance.onend = () => {
@@ -469,7 +484,6 @@ function ReportDetail({ report, onBack, onDownload }) {
       setSpeakingId(null)
       setSpeechMessage({ id: speechId, text: 'Audio could not be played. Check your browser sound settings and try again.' })
     }
-
     utteranceRef.current = utterance
     activeSpeechIdRef.current = speechId
     setSpeakingId(speechId)
@@ -481,6 +495,76 @@ function ReportDetail({ report, onBack, onDownload }) {
       setSpeakingId(null)
       setSpeechMessage({ id: speechId, text: 'Audio could not be played. Check your browser sound settings and try again.' })
     }
+  }
+
+  const toggleSpeech = async (finding, speechId) => {
+    if (activeSpeechIdRef.current === speechId || translatingId === speechId) {
+      stopSpeech()
+      return
+    }
+    stopSpeech()
+    setSpeechMessage(null)
+    const spokenCode = String(finding.code || '').split('').join(' ')
+    if (speechLanguage === 'en') {
+      const text = [
+        `Diagnostic code ${spokenCode}. ${finding.title || 'Diagnostic trouble code.'}`,
+        finding.description,
+        finding.causes?.length ? `Possible causes, not confirmed: ${finding.causes.join('. ')}` : '',
+        finding.nextStep ? `What to do next: ${finding.nextStep}` : '',
+      ].filter(Boolean).join('. ')
+      speak(text, finding, speechId, speechLanguage)
+      return
+    }
+
+    const controller = new AbortController()
+    translationAbortRef.current = controller
+    setTranslatingId(speechId)
+    try {
+      const translation = await translateSpeech({
+        language: speechLanguage,
+        code: finding.code,
+        title: finding.title || 'Diagnostic trouble code',
+        description: finding.description || '',
+        causes: (finding.causes || []).slice(0, 5),
+        nextStep: finding.nextStep || '',
+      }, controller.signal)
+      if (controller.signal.aborted || translationAbortRef.current !== controller) return
+      const introductions = {
+        hi: `डायग्नोस्टिक कोड ${spokenCode} का मतलब है।`,
+        'hi-Latn': `Diagnostic code ${spokenCode} ka matlab hai.`,
+        ur: `تشخیصی کوڈ ${spokenCode} کا مطلب ہے۔`,
+        te: `డయాగ్నస్టిక్ కోడ్ ${spokenCode} అర్థం.`,
+        ta: `கண்டறிதல் குறியீடு ${spokenCode} என்பதன் பொருள்.`,
+        bn: `ডায়াগনস্টিক কোড ${spokenCode} এর মানে হলো।`,
+        mr: `डायग्नोस्टिक कोड ${spokenCode} चा अर्थ आहे.`,
+        kn: `ಡಯಾಗ್ನೋಸ್ಟಿಕ್ ಕೋಡ್ ${spokenCode} ಅರ್ಥ.`,
+        ml: `ഡയഗ്നോസ്റ്റിക് കോഡ് ${spokenCode} എന്നതിന്റെ അർത്ഥം.`,
+        pa: `ਡਾਇਗਨੋਸਟਿਕ ਕੋਡ ${spokenCode} ਦਾ ਮਤਲਬ ਹੈ।`,
+        gu: `ડાયગ્નોસ્ટિક કોડ ${spokenCode} નો અર્થ છે.`,
+        ar: `رمز التشخيص ${spokenCode} يعني.`,
+        es: `El código de diagnóstico ${spokenCode} significa.`,
+        fr: `Le code de diagnostic ${spokenCode} signifie.`,
+        pt: `O código de diagnóstico ${spokenCode} significa.`,
+        de: `Der Diagnosecode ${spokenCode} bedeutet.`,
+        ja: `診断コード ${spokenCode} の意味は。`,
+      }
+      translationAbortRef.current = null
+      setTranslatingId(null)
+      speak(`${introductions[speechLanguage]} ${translation}`, finding, speechId, speechLanguage)
+    } catch (error) {
+      if (controller.signal.aborted || error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') return
+      if (translationAbortRef.current === controller) {
+        translationAbortRef.current = null
+        setTranslatingId(null)
+        setSpeechMessage({ id: speechId, text: error?.message || 'Online translation could not be completed. Try again later.' })
+      }
+    }
+  }
+
+  const changeSpeechLanguage = (language) => {
+    stopSpeech()
+    setSpeechMessage(null)
+    setSpeechLanguage(language)
   }
 
   return (
@@ -502,8 +586,15 @@ function ReportDetail({ report, onBack, onDownload }) {
       </section>
       {report.summary && <section className="panel detail-summary"><span className="eyebrow">TECHNICAL SUMMARY</span><p>{report.summary}</p></section>}
       <section className="panel findings-panel">
-        <div className="panel-heading">
+        <div className="panel-heading findings-heading">
           <div><span className="eyebrow">CODE FINDINGS</span><h2>{report.diagnostics?.length || 0} detected codes</h2></div>
+          {report.diagnostics?.length > 0 && <div className="speech-language-control">
+            <label htmlFor="speech-language">Listen in</label>
+            <select id="speech-language" aria-label="Listen language" value={speechLanguage} onChange={(event) => changeSpeechLanguage(event.target.value)}>
+              {speechLanguages.map((language) => <option key={language.value} value={language.value}>{language.label}</option>)}
+            </select>
+            <small>{translationApiConfigured ? 'Only this code explanation is sent for translation; the scan and VIN are not sent. Voice availability depends on your device.' : 'Online translation is not connected on this website yet.'}</small>
+          </div>}
         </div>
         {report.diagnostics?.length ? (
           <div className="finding-list">
@@ -515,6 +606,7 @@ function ReportDetail({ report, onBack, onDownload }) {
                 vehicleMake={vehicleMake}
                 speechId={speechId}
                 speaking={speakingId === speechId}
+                translating={translatingId === speechId}
                 speechMessage={speechMessage?.id === speechId ? speechMessage.text : ''}
                 onListen={toggleSpeech}
               />
@@ -532,7 +624,7 @@ function ReportDetail({ report, onBack, onDownload }) {
   )
 }
 
-function Finding({ item, vehicleMake, speechId, speaking, speechMessage, onListen }) {
+function Finding({ item, vehicleMake, speechId, speaking, translating, speechMessage, onListen }) {
   const finding = enrichDiagnostic(item, { make: vehicleMake })
   return (
     <article className="finding-card">
@@ -544,12 +636,12 @@ function Finding({ item, vehicleMake, speechId, speaking, speechMessage, onListe
           type="button"
           className="listen-button"
           onClick={() => onListen(finding, speechId)}
-          aria-label={`${speaking ? 'Stop listening to' : 'Listen to'} ${finding.code} explanation`}
-          aria-pressed={speaking}
-          title={speaking ? 'Stop listening' : 'Listen to this code explanation'}
+          aria-label={`${speaking ? 'Stop listening to' : translating ? 'Stop translating' : 'Listen to'} ${finding.code} explanation`}
+          aria-pressed={speaking || translating}
+          title={speaking || translating ? 'Stop listening' : 'Listen to this code explanation'}
         >
-          {speaking ? <Square size={13} fill="currentColor" /> : <Volume2 size={15} />}
-          <span>{speaking ? 'Stop' : 'Listen'}</span>
+          {speaking || translating ? <Square size={13} fill="currentColor" /> : <Volume2 size={15} />}
+          <span>{translating ? 'Translating…' : speaking ? 'Stop' : 'Listen'}</span>
         </button>
       </div>
       <h3>{finding.title}</h3>
@@ -557,6 +649,7 @@ function Finding({ item, vehicleMake, speechId, speaking, speechMessage, onListe
       {finding.causes?.length > 0 && <div className="finding-causes"><strong>Possible causes (not confirmed)</strong><span>{finding.causes.join(' · ')}</span></div>}
       {finding.nextStep && <div className="finding-next-step"><strong>What to do next</strong><span>{finding.nextStep}</span></div>}
       {speechMessage && <div className="speech-message" role="status">{speechMessage}</div>}
+      {translating && <div className="speech-message" role="status">Translating this explanation…</div>}
       <div className="finding-meta">
         <span><Shield size={14} />{finding.drivingRecommendation || 'Have the code and vehicle symptoms verified before making repair decisions.'}</span>
         {finding.source && <span>Reference: {finding.sourceUrl ? <a href={finding.sourceUrl} target="_blank" rel="noreferrer">{finding.source}</a> : finding.source}</span>}

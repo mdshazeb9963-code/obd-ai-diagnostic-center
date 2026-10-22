@@ -95,6 +95,16 @@ class ApiIntegrationTest {
             .andExpect(status().isForbidden());
     }
 
+    @Test void speechTranslationIsPublicButValidatesInputAndRequiresServerSideProviderKey() throws Exception {
+        mvc.perform(post("/api/v1/ai/speech-translation").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"language\":\"hi\",\"code\":\"C1241\",\"title\":\"Low voltage\",\"description\":\"Battery voltage is outside range.\",\"causes\":[\"Weak battery\"],\"nextStep\":\"Test the battery.\"}"))
+            .andExpect(status().isServiceUnavailable())
+            .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("OPENAI_API_KEY")));
+        mvc.perform(post("/api/v1/ai/speech-translation").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"language\":\"xx\",\"code\":\"C1241\",\"title\":\"Low voltage\",\"description\":\"Battery voltage is outside range.\"}"))
+            .andExpect(status().isBadRequest());
+    }
+
     private String register(String email,String name)throws Exception{
         MvcResult result=mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
             .content(mapper.writeValueAsString(java.util.Map.of("displayName",name,"email",email,"password","CorrectHorseBattery12"))))

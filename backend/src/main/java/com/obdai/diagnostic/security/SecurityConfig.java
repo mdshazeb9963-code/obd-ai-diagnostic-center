@@ -42,7 +42,7 @@ public class SecurityConfig {
         return http.cors(Customizer.withDefaults()).csrf(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable).httpBasic(AbstractHttpConfigurer::disable)
             .sessionManagement(s->s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(a->a.requestMatchers("/api/v1/auth/**","/actuator/health","/docs","/docs/**","/openapi","/openapi/**","/swagger-ui/**","/v3/api-docs/**").permitAll()
+            .authorizeHttpRequests(a->a.requestMatchers("/api/v1/auth/**","/api/v1/ai/speech-translation","/actuator/health","/docs","/docs/**","/openapi","/openapi/**","/swagger-ui/**","/v3/api-docs/**").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS,"/**").permitAll().anyRequest().authenticated())
             .addFilterBefore(rateLimitFilter,UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(originFilter,RateLimitFilter.class)
