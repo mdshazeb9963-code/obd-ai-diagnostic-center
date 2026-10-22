@@ -193,7 +193,7 @@ function DemoOverview({ reports, loading, error, sample, onNavigate }) {
       <div className="demo-welcome-copy">
         <span className="eyebrow"><span className="eyebrow-dot" /> FREE BROWSER DEMO</span>
         <h1>Check your scanner export.</h1>
-        <p>No account or API key needed. Upload a text scan, or try the sample to see how reports work.</p>
+        <p>No account or API key needed. Upload a scanner export or try the sample. PDFs need selectable text.</p>
         <div className="demo-welcome-actions">
           <button className="button button-primary" onClick={() => onNavigate('upload')}><Upload size={16} /> Upload a scan</button>
           <button className="button button-secondary" onClick={() => sample.mutate()} disabled={sample.isPending}>{sample.isPending ? <span className="spinner" /> : <FileText size={15} />}{sample.isPending ? 'Loading sample…' : 'Try sample report'}</button>
@@ -203,7 +203,7 @@ function DemoOverview({ reports, loading, error, sample, onNavigate }) {
       <div className="demo-welcome-art" aria-hidden="true"><div className="demo-art-ring ring-one"/><div className="demo-art-ring ring-two"/><div className="demo-engine"><Activity size={46}/><span>OBD II</span></div><i className="art-dot dot-one"/><i className="art-dot dot-two"/><i className="art-dot dot-three"/></div>
     </section>
     <section className="demo-steps" aria-label="How to use the demo">
-      <div><span>1</span><p><strong>Choose a scan</strong><small>TXT, CSV, JSON, XML, or LOG</small></p></div>
+      <div><span>1</span><p><strong>Choose a scan</strong><small>TXT, CSV, LOG, or PDF text</small></p></div>
       <ArrowRight className="demo-step-arrow" size={16}/>
       <div><span>2</span><p><strong>Review extracted codes</strong><small>Parsed in this browser</small></p></div>
       <ArrowRight className="demo-step-arrow" size={16}/>
@@ -268,16 +268,16 @@ function UploadPage({ onSaved, demoMode = false }) {
   }
   const onDrop = (event) => { event.preventDefault(); setDrag(false); choose(event.dataTransfer.files?.[0]) }
   return <div className="content narrow-content">
-    <PageIntro eyebrow="NEW DIAGNOSTIC" title="Upload a scanner export" description={demoMode ? 'Extract code-shaped text from a scanner export in this browser. This demo does not verify code meanings or repairs.' : 'Bring your OBD report in. We’ll extract codes, identify vehicle details when present, and build a traceable diagnostic report.'} />
+    <PageIntro eyebrow="NEW DIAGNOSTIC" title="Upload a scanner export" description={demoMode ? 'Text exports and selectable-text PDFs are read in this browser. Image-only PDFs need OCR. Code meanings and repairs are not verified.' : 'Bring your OBD report in. We’ll extract codes, identify vehicle details when present, and build a traceable diagnostic report.'} />
     {completed ? <div className="panel upload-result"><div className="result-check"><Check size={24} /></div><span className="eyebrow">SCAN PROCESSED</span><h2>Your report is ready</h2><p>{completed.diagnostics?.length || 0} diagnostic codes extracted from <strong>{completed.fileName || file?.name}</strong>.</p><div className="result-meta"><span><FileText size={15} /> {completed.vehicleName || 'Vehicle details unavailable'}</span><span><Clock3 size={15} /> {new Date(completed.createdAt || Date.now()).toLocaleString()}</span></div><div className="result-actions"><button className="button button-primary" onClick={onSaved}>Open report history <ArrowRight size={16} /></button><button className="button button-ghost" onClick={() => { setCompleted(null); setFile(null) }}>Upload another</button></div></div> : <>
       <div className="upload-steps"><div className="step active"><span>01</span><div><strong>Choose file</strong><small>Scanner export</small></div></div><div className="step-line" /><div className="step"><span>02</span><div><strong>Review scan</strong><small>Codes & vehicle</small></div></div><div className="step-line" /><div className="step"><span>03</span><div><strong>Get your report</strong><small>Recommendations</small></div></div></div>
       <div className={cx('dropzone', drag && 'dropzone-active', file && 'dropzone-file')} onDragOver={(e) => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)} onDrop={onDrop}>
-        <input id="scan-file" type="file" aria-label="Scanner export file" onChange={(e) => choose(e.target.files?.[0])} />
+        <input id="scan-file" type="file" accept={demoMode ? '.txt,.csv,.json,.xml,.log,.pdf,text/plain,text/csv,application/json,application/xml,application/pdf' : '.txt,.csv,.json,.xml,.log,text/plain,text/csv,application/json,application/xml'} aria-label="Scanner export file" onChange={(e) => choose(e.target.files?.[0])} />
         <div className="upload-icon"><CloudUpload size={24} /></div>
-        {file ? <><strong>{file.name}</strong><span>{formatBytes(file.size)} · Ready to process</span><button className="text-link" type="button" onClick={() => setFile(null)}>Remove file</button></> : <><strong>Drop your diagnostic file here</strong><span>or <label htmlFor="scan-file" className="browse-link">browse files</label> on your device</span><small>TXT, CSV, JSON, XML, LOG or custom text exports · Max 20 MB</small></>}
+        {file ? <><strong>{file.name}</strong><span>{formatBytes(file.size)} · Ready to process</span><button className="text-link" type="button" onClick={() => setFile(null)}>Remove file</button></> : <><strong>Drop your diagnostic file here</strong><span>or <label htmlFor="scan-file" className="browse-link">browse files</label> on your device</span><small>{demoMode ? 'TXT, CSV, JSON, XML, LOG, or PDFs with selectable text · Max 20 MB' : 'TXT, CSV, JSON, XML, LOG, or custom text exports · Max 20 MB'}</small></>}
       </div>
       {error && <div className="form-error"><TriangleAlert size={16} />{error}</div>}
-      <div className="supported-card"><div className="supported-icon"><Activity size={19} /></div><div><strong>Made for scanner exports</strong><p>Torque Pro, Car Scanner, OBD Fusion, BlueDriver, ELM327 logs, manufacturer tools and custom text exports. Unknown layouts are scanned for valid DTCs.</p></div><button title="Supported formats" aria-label="About supported formats"><CircleHelp size={16} /></button></div>
+      <div className="supported-card"><div className="supported-icon"><Activity size={19} /></div><div><strong>Made for scanner exports</strong><p>{demoMode ? 'TXT, CSV, JSON, XML, LOG, and PDFs with selectable text. Image-only PDFs need OCR first. Unknown layouts are scanned for valid DTC codes.' : 'Torque Pro, Car Scanner, OBD Fusion, BlueDriver, ELM327 logs, manufacturer tools and custom text exports. Unknown layouts are scanned for valid DTCs.'}</p></div><button title="Supported formats" aria-label="About supported formats"><CircleHelp size={16} /></button></div>
       <div className="privacy-line"><LockKeyhole size={14} />{demoMode ? 'The file is read in your browser. Only extracted codes and report details are saved on this device.' : 'Files are validated on upload and are only visible within your account.'}</div>
       <div className="upload-footer"><button className="button button-ghost" onClick={() => setFile(null)} disabled={!file || mutation.isPending}>Clear selection</button><button className="button button-primary" disabled={!file || mutation.isPending} onClick={() => { setError(''); mutation.mutate() }}>{mutation.isPending ? <><span className="spinner" /> Analyzing scan…</> : <>Analyze file <ArrowRight size={16} /></>}</button></div>
     </>}

@@ -20,7 +20,7 @@ A synthetic scanner export is included at `samples/example-scanner-export.txt` f
 
 Open the [live website](https://mdshazeb9963-code.github.io/obd-ai-diagnostic-center/). It opens directly into an interactive, no-login browser demo. You do not need to press keys, install software, create an account, or enter an API key to try it. Choose **Upload a scan** or click **Try sample report**.
 
-GitHub Pages publishes the demo from `frontend/` on pushes to `main`. In this mode, scanner text is parsed locally; reports, vehicles, and service notes are stored in that browser's local storage. The demo does not send uploaded text to a server. Clearing the browser's site data removes demo records.
+GitHub Pages publishes the demo from `frontend/` on pushes to `main`. In this mode, text scanner exports and PDFs with selectable text are parsed locally; image-only PDF scans need OCR first. Reports, vehicles, and service notes are stored in that browser's local storage. The demo does not send uploaded files to a server. Clearing the browser's site data removes demo records.
 
 The browser demo extracts DTC-shaped codes but does not claim their meaning, severity, cause, or repair. Its sample scan is synthetic. VIN decoding, account sync, verified diagnostic-provider results, and AI responses require connected services and are not part of the static demo. Run the Docker Compose full stack below to exercise the Spring API, MySQL, and Redis locally; configure optional diagnostic and AI providers for those features.
 

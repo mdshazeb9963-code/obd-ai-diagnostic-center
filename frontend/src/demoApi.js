@@ -24,6 +24,47 @@ function writeList(name, value) {
 const newId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
 const newestFirst = (rows) => [...rows].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
 
+function readFileBuffer(file) {
+  if (typeof file.arrayBuffer === 'function') return file.arrayBuffer()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(new Error('The selected PDF could not be read.'))
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+async function extractPdfText(file) {
+  let loadingTask
+  try {
+    const [pdfjs, worker] = await Promise.all([
+      import('pdfjs-dist/build/pdf.mjs'),
+      import('pdfjs-dist/build/pdf.worker.min.mjs?url'),
+    ])
+    pdfjs.GlobalWorkerOptions.workerSrc = worker.default
+    loadingTask = pdfjs.getDocument({ data: new Uint8Array(await readFileBuffer(file)), isEvalSupported: false })
+    const document = await loadingTask.promise
+    if (document.numPages > 100) throw new Error('This PDF has more than 100 pages. Split it into smaller files or export the scanner data as text.')
+
+    const pages = []
+    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+      const page = await document.getPage(pageNumber)
+      const content = await page.getTextContent({ includeMarkedContent: false })
+      pages.push(content.items.map((item) => 'str' in item ? item.str : '').join(' '))
+      page.cleanup()
+    }
+    const text = pages.join('\n')
+    if (!text.trim()) throw new Error('No selectable text was found in this PDF. It may be a scanned image. Use OCR first or export the scanner data as TXT or CSV.')
+    return text
+  } catch (error) {
+    const message = String(error?.message || '')
+    if (/more than 100 pages|No selectable text/.test(message)) throw new Error(message)
+    throw new Error('We could not read this PDF. It may be damaged or password-protected. Try a text-based scanner export instead.')
+  } finally {
+    if (loadingTask) await loadingTask.destroy().catch(() => {})
+  }
+}
+
 function response(config, data, status = 200) {
   return { config, data, status, statusText: status === 200 ? 'OK' : 'Created', headers: {}, request: null }
 }
@@ -57,16 +98,17 @@ async function reportFromFile(file) {
   if (file.size > 20 * 1024 * 1024) throw new Error('This file is larger than the 20 MB upload limit.')
   const filename = String(file.name || 'scanner-export.txt')
   const extension = filename.match(/\.([^.]+)$/)?.[1]?.toLowerCase() || ''
-  const binaryExtensions = new Set(['pdf', 'png', 'jpg', 'jpeg', 'gif', 'zip', 'gz', 'exe', 'doc', 'docx', 'xls', 'xlsx'])
-  if (binaryExtensions.has(extension) || (file.type && !/^(text\/|application\/(json|xml|octet-stream))/i.test(file.type))) throw new Error('Use a TXT, CSV, JSON, XML, LOG, or other text-like scanner export.')
-  const text = typeof file.text === 'function' ? await file.text() : await new Promise((resolve, reject) => {
+  const isPdf = extension === 'pdf' || file.type === 'application/pdf'
+  const binaryExtensions = new Set(['png', 'jpg', 'jpeg', 'gif', 'zip', 'gz', 'exe', 'doc', 'docx', 'xls', 'xlsx'])
+  if ((!isPdf && binaryExtensions.has(extension)) || (!isPdf && file.type && !/^(text\/|application\/(json|xml|octet-stream))/i.test(file.type))) throw new Error('Use a TXT, CSV, JSON, XML, LOG, or text-based PDF scanner export.')
+  const text = isPdf ? await extractPdfText(file) : typeof file.text === 'function' ? await file.text() : await new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result || ''))
     reader.onerror = () => reject(new Error('The selected file could not be read.'))
     reader.readAsText(file)
   })
   if (text.includes('\u0000')) throw new Error('This file does not look like a text scanner export.')
-  const codes = [...new Set((text.toUpperCase().match(/\b[PCBU][0-3][A-F0-9]{3}\b/g) || []))]
+  const codes = [...new Set([...text.toUpperCase().matchAll(/\b([PCBU])\s*([0-3])\s*([A-F0-9])\s*([A-F0-9])\s*([A-F0-9])\b/g)].map((match) => match.slice(1).join('')))]
   const createdAt = new Date().toISOString()
   const diagnostics = codes.map((code) => ({
     code,

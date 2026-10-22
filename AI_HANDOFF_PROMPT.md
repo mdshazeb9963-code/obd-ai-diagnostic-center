@@ -26,7 +26,7 @@ The user wants a working website they can open and use without signing in, enter
 
 - The Pages URL above loads without account creation, sign-in, commands, or API keys.
 - On the first screen, offer two clear actions: **Upload a scan** and **Try sample report**.
-- The demo reads supported text scanner exports in the browser. It stores demo reports, vehicles, and service notes in that browser's local storage; clearing the browser's site data removes them. Do not claim records sync between devices or are backed up.
+- The demo reads supported text scanner exports and selectable-text PDFs in the browser. Image-only/scanned PDFs need OCR first. It stores demo reports, vehicles, and service notes in that browser's local storage; clearing the browser's site data removes them. Do not claim records sync between devices or are backed up.
 - The sample scan is synthetic and visibly a sample. Only extracted code-shaped text is shown as found; its interpretation remains unverified.
 - Keep the demo navigation compact and useful. A user should be able to reach Home, Upload, Garage, and Reports without hunting. Avoid showing backend-only settings and account controls in this static demo.
 - The full-stack source can remain in the repository, but its backend-dependent features must be clearly identified as requiring separate service deployment. Do not add a login wall to the GitHub Pages demo.
@@ -37,7 +37,7 @@ Before changing code, inspect the existing workflow, Vite configuration, current
 
 After a change:
 
-1. Run the existing frontend tests and production build. Fix failures rather than claiming success. Exercise repeated navigation/button clicks, uploading a supported sample text file, opening a report, and refreshing to verify local persistence when those flows are affected.
+1. Run the existing frontend tests and production build. Fix failures rather than claiming success. Exercise repeated navigation/button clicks, uploading a supported sample text file and a selectable-text PDF, opening reports, and refreshing to verify local persistence when those flows are affected. Confirm an image-only PDF gets a helpful OCR explanation.
 2. Check that build output has a root `index.html` and that asset paths use the GitHub repository subpath. Do not treat a README rendering as a deployed app.
 3. Commit and push the finished change to the existing `main` branch. Check the Pages Actions run until it succeeds, then open the live Pages URL and verify the actual deployed UI, including its no-login entry screen.
 4. Give the user the direct live website link and concise directions. State plainly which features require a separate backend or provider. Never ask them to paste secrets into the frontend or claim 100% correctness.
