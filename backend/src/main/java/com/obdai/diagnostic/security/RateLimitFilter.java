@@ -24,13 +24,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override protected void doFilterInternal(HttpServletRequest req,HttpServletResponse res,FilterChain chain)throws ServletException,IOException{
         String path=req.getRequestURI();
         if(path.startsWith("/actuator/")||path.startsWith("/docs")||path.startsWith("/openapi")||path.startsWith("/swagger-ui")){chain.doFilter(req,res);return;}
-        if(path.equals("/api/v1/ai/speech-translation")&&req.getContentLengthLong()>16_384){
-            res.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);res.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            res.getWriter().write(mapper.writeValueAsString(new ApiModels.ApiError("Translation request is too large.",Instant.now())));return;
-        }
         long minute=Instant.now().getEpochSecond()/60;
-        int limit=path.equals("/api/v1/ai/speech-translation")?12:path.startsWith("/api/v1/auth/")?12:properties.getLimits().getRequestPerMinute();
-        String bucket=path.equals("/api/v1/ai/speech-translation")?"translation":path.startsWith("/api/v1/auth/")?"auth":path.equals("/api/v1/scans/upload")?"scan":"api";
+        int limit=path.startsWith("/api/v1/auth/")?12:properties.getLimits().getRequestPerMinute();
+        String bucket=path.startsWith("/api/v1/auth/")?"auth":path.equals("/api/v1/scans/upload")?"scan":"api";
         if(path.equals("/api/v1/scans/upload"))limit=30;
         String key="obd:rate:"+req.getRemoteAddr()+":"+bucket+":"+minute;
         boolean allowed=true;

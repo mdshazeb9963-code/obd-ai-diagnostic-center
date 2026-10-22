@@ -44,14 +44,6 @@ public final class ApiModels {
                                 Integer healthScore,long uploadedBytes,Instant createdAt) {}
     public record AssistantRequest(@NotBlank @Size(max=1000) String message) {}
     public record AssistantResponse(String answer,String model,Instant generatedAt) {}
-    public record SpeechTranslationRequest(
-            @NotBlank @Pattern(regexp="hi|hi-Latn|ur|te|ta|bn|mr|kn|ml|pa|gu|ar|es|fr|pt|de|ja") String language,
-            @NotBlank @Pattern(regexp="[PCBU][0-3][A-Fa-f0-9]{3}") String code,
-            @NotBlank @Size(max=180) String title,
-            @NotBlank @Size(max=700) String description,
-            @Size(max=5) List<@NotBlank @Size(max=180) String> causes,
-            @Size(max=350) String nextStep) {}
-    public record SpeechTranslationResponse(String translation,Instant generatedAt) {}
     public record SubscriptionDto(String planCode,String status,long scansUsed,long scanLimit,
                                  Instant currentPeriodStart,Instant currentPeriodEnd) {}
     public record NotificationDto(String id,String category,String title,String body,Instant readAt,Instant createdAt) {}

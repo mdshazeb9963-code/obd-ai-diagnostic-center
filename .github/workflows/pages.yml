@@ -41,7 +41,6 @@ jobs:
         env:
           VITE_BASE_PATH: /obd-ai-diagnostic-center/
           VITE_STATIC_PREVIEW: 'true'
-          VITE_TRANSLATION_API_URL: ${{ vars.TRANSLATION_API_URL }}
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

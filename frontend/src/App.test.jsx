@@ -3,10 +3,9 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
-const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(), translateSpeech: vi.fn() }))
+const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() }))
 vi.mock('./api.js', () => ({
   http: api,
-  translateSpeech: api.translateSpeech,
   errorMessage: (e, fallback = 'Something went wrong.') => e?.message || fallback,
 }))
 import App from './App.jsx'
@@ -23,7 +22,6 @@ describe('OBD AI workspace journeys', () => {
     api.post.mockReset()
     api.put.mockReset()
     api.delete.mockReset()
-    api.translateSpeech.mockReset()
   })
   afterEach(() => cleanup())
 
@@ -166,7 +164,7 @@ describe('OBD AI workspace journeys', () => {
     }
   })
 
-  it('translates only the selected code explanation and uses a matching local speech voice', async () => {
+  it('plays the bundled Hindi guide locally without calling an API', async () => {
     const user = userEvent.setup()
     const originalSpeechDescriptor = Object.getOwnPropertyDescriptor(window, 'speechSynthesis')
     const hindiVoice = { name: 'Hindi Local', lang: 'hi-IN', localService: true, default: false }
@@ -176,12 +174,11 @@ describe('OBD AI workspace journeys', () => {
     }
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: synthesis })
     vi.stubGlobal('SpeechSynthesisUtterance', class MockUtterance { constructor(text) { this.text = text } })
-    api.translateSpeech.mockResolvedValue('बैटरी का वोल्टेज सामान्य सीमा से बाहर है।')
     api.get.mockImplementation((url) => {
       if (url === '/auth/me') return Promise.resolve({ data: { id: 'local-demo', displayName: 'Guest demo', role: 'USER' } })
       if (url === '/subscriptions/me') return Promise.resolve({ data: { planCode: 'DEMO', scansUsed: 1, scanLimit: -1 } })
       if (url === '/reports') return Promise.resolve({ data: [{
-        id: 'private-toyota-report', fileName: 'TOYOTA_JTN-BVIN-SECRET_scan.txt', vehicleName: 'Toyota', createdAt: '2026-10-22T10:00:00Z',
+        id: 'private-toyota-report', fileName: 'TOYOTA_scan.txt', vehicleName: 'Toyota', createdAt: '2026-10-22T10:00:00Z',
         diagnostics: [{ code: 'C1241', severity: 'UNKNOWN' }, { code: 'C1256', severity: 'UNKNOWN' }],
       }] })
       if (url === '/vehicles') return Promise.resolve({ data: [] })
@@ -192,19 +189,16 @@ describe('OBD AI workspace journeys', () => {
       await user.click(screen.getByRole('button', { name: 'Reports' }))
       await screen.findByRole('heading', { name: 'Diagnostic reports' })
       const reportTable = await screen.findByRole('table')
-      await user.click(within(reportTable).getByText('TOYOTA_JTN-BVIN-SECRET_scan.txt').closest('tr'))
+      await user.click(within(reportTable).getByText('TOYOTA_scan.txt').closest('tr'))
       await user.selectOptions(await screen.findByRole('combobox', { name: 'Listen language' }), 'hi')
+      expect(screen.getByText(/Nothing is sent to an online translation service/)).toBeInTheDocument()
       await user.click(await screen.findByRole('button', { name: 'Listen to C1241 explanation' }))
 
-      await waitFor(() => expect(synthesis.speak).toHaveBeenCalledTimes(1))
-      const [payload, signal] = api.translateSpeech.mock.calls[0]
-      expect(payload).toMatchObject({ language: 'hi', code: 'C1241' })
-      expect(Object.keys(payload).sort()).toEqual(['causes', 'code', 'description', 'language', 'nextStep', 'title'].sort())
-      expect(JSON.stringify(payload)).not.toContain('JTN-BVIN-SECRET')
-      expect(signal).toBeInstanceOf(AbortSignal)
+      expect(synthesis.speak).toHaveBeenCalledTimes(1)
+      expect(api.post).not.toHaveBeenCalled()
       const utterance = synthesis.speak.mock.calls[0][0]
-      expect(utterance.text).toContain('बैटरी का वोल्टेज सामान्य सीमा से बाहर है।')
       expect(utterance.text).toContain('C 1 2 4 1')
+      expect(utterance.text).toContain('सप्लाई वोल्टेज')
       expect(utterance.text).not.toContain('Accumulator low pressure')
       expect(utterance.lang).toBe('hi-IN')
       expect(utterance.voice).toBe(hindiVoice)
@@ -216,21 +210,17 @@ describe('OBD AI workspace journeys', () => {
     }
   })
 
-  it('lets the mechanic cancel a translation before audio begins', async () => {
+  it('disables missing offline guides clearly and keeps English playback available', async () => {
     const user = userEvent.setup()
     const originalSpeechDescriptor = Object.getOwnPropertyDescriptor(window, 'speechSynthesis')
-    const synthesis = { speak: vi.fn(), cancel: vi.fn(), getVoices: vi.fn(() => []) }
+    const englishVoice = { name: 'English Local', lang: 'en-US', localService: true, default: true }
+    const synthesis = { speak: vi.fn(), cancel: vi.fn(), getVoices: vi.fn(() => [englishVoice]) }
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: synthesis })
     vi.stubGlobal('SpeechSynthesisUtterance', class MockUtterance { constructor(text) { this.text = text } })
-    let receivedSignal
-    api.translateSpeech.mockImplementation((_payload, signal) => {
-      receivedSignal = signal
-      return new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true }))
-    })
     api.get.mockImplementation((url) => {
       if (url === '/auth/me') return Promise.resolve({ data: { id: 'local-demo', displayName: 'Guest demo', role: 'USER' } })
       if (url === '/subscriptions/me') return Promise.resolve({ data: { planCode: 'DEMO', scansUsed: 1, scanLimit: -1 } })
-      if (url === '/reports') return Promise.resolve({ data: [{ id: 'cancel-report', fileName: 'scan.txt', diagnostics: [{ code: 'C1241' }] }] })
+      if (url === '/reports') return Promise.resolve({ data: [{ id: 'unlisted-code', fileName: 'TOYOTA_scan.txt', vehicleName: 'Toyota', diagnostics: [{ code: 'P0300' }, { code: 'C1241' }] }] })
       if (url === '/vehicles') return Promise.resolve({ data: [] })
       return Promise.resolve({ data: [] })
     })
@@ -239,14 +229,26 @@ describe('OBD AI workspace journeys', () => {
       await user.click(screen.getByRole('button', { name: 'Reports' }))
       await screen.findByRole('heading', { name: 'Diagnostic reports' })
       const reportTable = await screen.findByRole('table')
-      await user.click(within(reportTable).getAllByText('scan.txt')[0].closest('tr'))
-      await user.selectOptions(await screen.findByRole('combobox', { name: 'Listen language' }), 'te')
-      await user.click(await screen.findByRole('button', { name: 'Listen to C1241 explanation' }))
-      const stop = await screen.findByRole('button', { name: 'Stop translating C1241 explanation' })
-      await user.click(stop)
-      expect(receivedSignal.aborted).toBe(true)
+      await user.click(within(reportTable).getAllByText('TOYOTA_scan.txt')[0].closest('tr'))
+      await user.selectOptions(await screen.findByRole('combobox', { name: 'Listen language' }), 'hi')
+      const listen = screen.getByRole('button', { name: 'Listen to P0300 explanation' })
+      expect(listen).toBeDisabled()
+      expect(listen.title).toContain('No offline guide')
       expect(synthesis.speak).not.toHaveBeenCalled()
-      expect(await screen.findByRole('button', { name: 'Listen to C1241 explanation' })).toBeInTheDocument()
+      expect(api.post).not.toHaveBeenCalled()
+
+      await user.click(screen.getByRole('button', { name: 'Listen to C1241 explanation' }))
+      const localVoiceNotice = await screen.findByText(/No installed offline/)
+      expect(localVoiceNotice).toHaveTextContent('सप्लाई वोल्टेज')
+      expect(synthesis.speak).not.toHaveBeenCalled()
+      expect(api.post).not.toHaveBeenCalled()
+
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Listen language' }), 'en')
+      expect(listen).toBeEnabled()
+      await user.click(listen)
+      expect(synthesis.speak).toHaveBeenCalledTimes(1)
+      expect(synthesis.speak.mock.calls[0][0].text).toContain('P 0 3 0 0')
+      expect(api.post).not.toHaveBeenCalled()
     } finally {
       view.unmount()
       if (originalSpeechDescriptor) Object.defineProperty(window, 'speechSynthesis', originalSpeechDescriptor)
@@ -254,7 +256,6 @@ describe('OBD AI workspace journeys', () => {
       vi.unstubAllGlobals()
     }
   })
-
   it('signs in, navigates to upload, validates a file, and saves the resulting report', async () => {
     const user = userEvent.setup()
     api.post.mockResolvedValueOnce({ data: { accessToken: 'test-access', user: { id: 'u1', role: 'USER' } } })
