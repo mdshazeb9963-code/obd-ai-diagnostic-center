@@ -5,7 +5,7 @@ A responsive vehicle diagnostic workspace with a React frontend, Java 21 / Sprin
 ## Features
 
 - Account registration and sign-in, short-lived JWT access tokens, rotating HttpOnly refresh cookies, BCrypt password hashing, role-based access, origin checks for cookie mutations, and API rate limits.
-- Upload up to 20 MB of UTF-8 scanner exports. TXT, CSV, JSON, XML, LOG, and custom text-like extensions are inspected. DTCs are extracted by standard P/C/B/U code shape without a local code catalog.
+- Upload up to 20 MB of UTF-8 scanner exports. TXT, CSV, JSON, XML, LOG, and custom text-like extensions are inspected. DTC-shaped codes are extracted; the browser demo includes a small offline reference for common codes.
 - Vehicle and VIN detection. VIN decoding uses NHTSA vPIC; an identified vehicle can be saved to the garage automatically.
 - Pluggable diagnostic data providers, response validation and merging, confidence/source display, MySQL cache, Redis cache, TTL, and scheduled refresh.
 - Unresolved codes stay visibly unresolved. When a provider has no verified description, the system does not invent a title, severity, cause, repair, safety recommendation, or cost.
@@ -22,7 +22,7 @@ Open the [live website](https://mdshazeb9963-code.github.io/obd-ai-diagnostic-ce
 
 GitHub Pages publishes the demo from `frontend/` on pushes to `main`. In this mode, text scanner exports and PDFs with selectable text are parsed locally; image-only PDF scans need OCR first. Reports, vehicles, and service notes are stored in that browser's local storage. The demo does not send uploaded files to a server. Clearing the browser's site data removes demo records.
 
-The browser demo extracts DTC-shaped codes but does not claim their meaning, severity, cause, or repair. Its sample scan is synthetic. VIN decoding, account sync, verified diagnostic-provider results, and AI responses require connected services and are not part of the static demo. Run the Docker Compose full stack below to exercise the Spring API, MySQL, and Redis locally; configure optional diagnostic and AI providers for those features.
+The browser demo includes plain-language meanings and possible causes for a limited set of common codes, plus a few Toyota-specific references. These references do not verify the uploaded code, confirm vehicle applicability, assign severity, or diagnose a failed part. For unsupported or manufacturer-specific codes, the report explains what vehicle details are needed instead of guessing. Its sample scan is synthetic. VIN decoding, account sync, provider-verified results, and AI responses require connected services and are not part of the static demo. Run the Docker Compose full stack below to exercise the Spring API, MySQL, and Redis locally; configure optional diagnostic and AI providers for those features.
 
 ## Requirements
 
@@ -104,7 +104,7 @@ Provider JSON shape:
 
 Accepted provider severities are INFO, LOW, MEDIUM, HIGH, and CRITICAL. Results are merged only if they identify the requested code. Conflicting severities become UNKNOWN; conflicting cost figures are omitted. Verified entries expire after seven days by default and are refreshed by a scheduled job. Unresolved results are not cached.
 
-No automotive DTC dataset or fake repair-cost estimator is bundled. Without a configured provider, upload, parsing, garage/history, report storage, PDF export, and source downloads still work, but provider-dependent findings remain unresolved.
+The backend has no comprehensive automotive DTC dataset or fake repair-cost estimator. The frontend's small offline reference is not a replacement for a provider's complete, vehicle-specific database. Without a configured provider, upload, parsing, garage/history, report storage, PDF export, and source downloads still work, but provider-dependent findings remain unresolved.
 
 ## VIN and health score
 

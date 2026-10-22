@@ -66,6 +66,34 @@ describe('OBD AI workspace journeys', () => {
     expect(api.post).toHaveBeenCalledWith('/demo/sample')
   })
 
+  it('shows plain-language causes and next steps for an older saved Toyota scan', async () => {
+    const user = userEvent.setup()
+    api.get.mockImplementation((url) => {
+      if (url === '/auth/me') return Promise.resolve({ data: { id: 'local-demo', displayName: 'Guest demo', role: 'USER' } })
+      if (url === '/subscriptions/me') return Promise.resolve({ data: { planCode: 'DEMO', scansUsed: 1, scanLimit: -1 } })
+      if (url === '/reports') return Promise.resolve({ data: [{
+        id: 'older-toyota-report',
+        fileName: 'TOYOTA_old-scan.txt',
+        vehicleName: 'Vehicle details not provided',
+        createdAt: '2026-10-22T10:00:00Z',
+        diagnostics: [{ code: 'C1256', severity: 'UNKNOWN', title: null, description: 'No verified diagnostic provider is connected in this browser demo.', causes: [] }],
+      }] })
+      if (url === '/vehicles') return Promise.resolve({ data: [] })
+      return Promise.resolve({ data: [] })
+    })
+    mount({ demoMode: true })
+
+    await user.click(screen.getByRole('button', { name: 'Reports' }))
+    await screen.findByRole('heading', { name: 'Diagnostic reports' })
+    const reportTable = await screen.findByRole('table')
+    await user.click(within(reportTable).getByText('TOYOTA_old-scan.txt').closest('tr'))
+
+    expect(await screen.findByText(/Accumulator low pressure \(Toyota brake system\)/i)).toBeInTheDocument()
+    expect(screen.getByText('Possible causes (not confirmed)')).toBeInTheDocument()
+    expect(screen.getByText('What to do next')).toBeInTheDocument()
+    expect(screen.getByText(/arrange prompt inspection by a qualified Toyota\/brake technician/i)).toBeInTheDocument()
+  })
+
   it('signs in, navigates to upload, validates a file, and saves the resulting report', async () => {
     const user = userEvent.setup()
     api.post.mockResolvedValueOnce({ data: { accessToken: 'test-access', user: { id: 'u1', role: 'USER' } } })

@@ -1,3 +1,5 @@
+import { enrichDiagnostic, inferVehicleMake } from './dtcReference.js'
+
 const STORAGE_KEYS = {
   reports: 'obd.demo.reports',
   vehicles: 'obd.demo.vehicles',
@@ -10,7 +12,16 @@ const memory = Object.fromEntries(Object.keys(STORAGE_KEYS).map((key) => [key, [
 function readList(name) {
   try {
     const value = JSON.parse(localStorage.getItem(STORAGE_KEYS[name]) || '[]')
-    return Array.isArray(value) ? value : []
+    if (!Array.isArray(value)) return []
+    if (name !== 'reports') return value
+    return value.map((report) => {
+      const vehicleMake = report.vehicleMake || inferVehicleMake(`${report.fileName || ''} ${report.vehicleName || ''}`)
+      return {
+        ...report,
+        vehicleMake,
+        diagnostics: (report.diagnostics || []).map((item) => enrichDiagnostic(item, { make: vehicleMake })),
+      }
+    })
   } catch {
     return memory[name]
   }
@@ -110,7 +121,8 @@ async function reportFromFile(file) {
   if (text.includes('\u0000')) throw new Error('This file does not look like a text scanner export.')
   const codes = [...new Set([...text.toUpperCase().matchAll(/\b([PCBU])\s*([0-3])\s*([A-F0-9])\s*([A-F0-9])\s*([A-F0-9])\b/g)].map((match) => match.slice(1).join('')))]
   const createdAt = new Date().toISOString()
-  const diagnostics = codes.map((code) => ({
+  const vehicleMake = inferVehicleMake(`${filename} ${text.slice(0, 5000)}`)
+  const diagnostics = codes.map((code) => enrichDiagnostic({
     code,
     severity: 'UNKNOWN',
     title: null,
@@ -119,11 +131,12 @@ async function reportFromFile(file) {
     drivingRecommendation: 'Have the code and vehicle symptoms verified by a qualified technician before making repair decisions.',
     confidence: null,
     source: null,
-  }))
+  }, { make: vehicleMake }))
   return addReport({
     id: newId(),
     fileName: filename,
-    vehicleName: 'Vehicle details not provided',
+    vehicleName: vehicleMake ? `${vehicleMake} · model/year not provided` : 'Vehicle details not provided',
+    vehicleMake,
     createdAt,
     diagnostics,
     healthScore: null,
@@ -139,7 +152,7 @@ function sampleReport() {
     fileName: 'sample-scanner-export.txt',
     vehicleName: 'Example vehicle (sample)',
     createdAt: new Date().toISOString(),
-    diagnostics: ['P0300', 'P0171'].map((code) => ({
+    diagnostics: ['P0300', 'P0171'].map((code) => enrichDiagnostic({
       code,
       severity: 'UNKNOWN',
       title: null,
@@ -164,7 +177,17 @@ function textPdf(report) {
     `Codes extracted: ${(report.diagnostics || []).length}`,
     '',
     'IMPORTANT: Extracted codes are not verified diagnoses or repair instructions.',
-    ...((report.diagnostics || []).flatMap((item) => [`Code: ${item.code} (UNVERIFIED)`, item.description || 'No verified description is available.', ''])),
+    ...((report.diagnostics || []).flatMap((item) => {
+      const finding = enrichDiagnostic(item, { make: report.vehicleMake || inferVehicleMake(`${report.fileName || ''} ${report.vehicleName || ''}`) })
+      return [
+        `Code: ${finding.code} (UNVERIFIED)`,
+        finding.title || 'Reference not available',
+        finding.description || 'No description is available.',
+        ...(finding.causes?.length ? [`Possible causes: ${finding.causes.join('; ')}`] : []),
+        ...(finding.nextStep ? [`Next step: ${finding.nextStep}`] : []),
+        '',
+      ]
+    })),
     'This report was created locally in your browser. No account or server was used.',
   ].map((line) => String(line).normalize('NFKD').replace(/[^\x20-\x7E]/g, '?').slice(0, 110))
 

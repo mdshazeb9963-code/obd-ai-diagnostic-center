@@ -33,6 +33,9 @@ describe('browser demo data adapter', () => {
     expect(created.data.fileName).toBe('scan.txt')
     expect(created.data.diagnostics.map((item) => item.code)).toEqual(['P0300', 'P0171'])
     expect(created.data.diagnostics.every((item) => item.severity === 'UNKNOWN')).toBe(true)
+    expect(created.data.diagnostics[0].title).toBe('Random/multiple cylinder misfire detected')
+    expect(created.data.diagnostics[0].causes).toContain('Worn spark plugs or ignition-coil fault')
+    expect(created.data.diagnostics[0].nextStep).toMatch(/flashing/)
 
     const listed = await call('get', '/reports')
     expect(listed.data).toHaveLength(1)
@@ -40,6 +43,37 @@ describe('browser demo data adapter', () => {
     const pdf = await blobText(exported.data)
     expect(pdf).toContain('%PDF-1.4')
     expect(pdf).toContain('UNVERIFIED')
+    expect(pdf).toContain('Random/multiple cylinder misfire detected')
+    expect(pdf).toContain('Possible causes:')
+  })
+
+  it('adds Toyota-specific reference notes while marking variant-dependent chassis codes clearly', async () => {
+    const form = new FormData()
+    form.append('file', new File(['Stored trouble codes: C1241, C1256, C1268'], 'TOYOTA_scan.txt', { type: 'text/plain' }))
+    const created = await call('post', '/scans/upload', form)
+
+    expect(created.data.vehicleMake).toBe('Toyota')
+    expect(created.data.vehicleName).toContain('Toyota')
+    expect(created.data.diagnostics.map((item) => item.code)).toEqual(['C1241', 'C1256', 'C1268'])
+    expect(created.data.diagnostics[0].title).toMatch(/battery-positive voltage/i)
+    expect(created.data.diagnostics[0].sourceUrl).toMatch(/toyotamanuals\.gitlab\.io/)
+    expect(created.data.diagnostics[1].title).toMatch(/Accumulator low pressure/i)
+    expect(created.data.diagnostics[1].nextStep).toMatch(/do not drive/i)
+    expect(created.data.diagnostics[2].title).toMatch(/exact vehicle details needed/i)
+    expect(created.data.diagnostics[2].description).toMatch(/not a universal OBD-II definition/i)
+  })
+
+  it('upgrades previously saved demo reports with code meanings when they are opened again', async () => {
+    localStorage.setItem('obd.demo.reports', JSON.stringify([{
+      id: 'older-report',
+      fileName: 'TOYOTA_old-scan.txt',
+      diagnostics: [{ code: 'C1256', severity: 'UNKNOWN', title: null, description: 'No verified diagnostic provider is connected in this browser demo.', causes: [] }],
+    }]))
+
+    const listed = await call('get', '/reports')
+    expect(listed.data[0].diagnostics[0].title).toMatch(/Accumulator low pressure/i)
+    expect(listed.data[0].diagnostics[0].causes.length).toBeGreaterThan(0)
+    expect(listed.data[0].diagnostics[0].nextStep).toMatch(/brake/i)
   })
 
   it('extracts DTCs from a selectable-text PDF locally', async () => {

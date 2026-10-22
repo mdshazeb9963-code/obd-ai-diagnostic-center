@@ -238,12 +238,14 @@ button:disabled{cursor:not-allowed;opacity:.55}
 .severity-tag i{width:5px;height:5px;background:currentColor;border-radius:50%}
 .severity-high,.severity-critical{background:#351f1d;color:#f09285}.severity-low,.severity-info{background:#1e291d;color:#badb96}
 .confidence{margin-left:auto;color:#818b82;font:9px var(--mono)}
-.finding-card h3{font:600 12px var(--display);color:#e0e6e0;margin:12px 0 5px}
-.finding-card>p{font-size:10px;color:#9aa49a;line-height:1.7;margin:0}
-.finding-causes{margin-top:10px;display:grid;gap:4px;font-size:9px}
-.finding-causes strong{color:#b3beb4;font-weight:500}.finding-causes span{color:#879188}
-.finding-meta{border-top:1px solid #242c26;margin-top:11px;padding-top:9px;display:flex;justify-content:space-between;gap:9px;color:#89948b;font-size:9px;flex-wrap:wrap}
+.finding-card h3{font:600 13px var(--display);color:#e0e6e0;margin:12px 0 5px;line-height:1.5}
+.finding-card>p{font-size:11px;color:#aab4aa;line-height:1.75;margin:0}
+.finding-causes,.finding-next-step{margin-top:10px;display:grid;gap:4px;font-size:10px;line-height:1.65}
+.finding-causes strong,.finding-next-step strong{color:#c0cbbd;font-weight:500}.finding-causes span,.finding-next-step span{color:#929d92}
+.finding-next-step{border-left:2px solid #8fc65b;padding:2px 0 2px 9px}
+.finding-meta{border-top:1px solid #242c26;margin-top:11px;padding-top:9px;display:flex;justify-content:space-between;gap:9px;color:#89948b;font-size:9px;flex-wrap:wrap;line-height:1.6}
 .finding-meta span{display:flex;align-items:center;gap:5px}.finding-meta svg{color:#a7bd90}
+.finding-meta a{color:#b8dc8c;text-decoration:underline;text-underline-offset:2px}
 .assistant-notice{display:flex;align-items:flex-start;gap:11px;padding:13px 14px;border:1px solid #343c2d;border-radius:8px;background:#151a13;color:#b6df8d}
 .assistant-notice>div{display:grid;gap:4px}
 .assistant-notice strong{font-size:10px;color:#d5e6c3}.assistant-notice span{font-size:9px;color:#899386;line-height:1.6}
