@@ -16,6 +16,10 @@ A responsive vehicle diagnostic workspace with a React frontend, Java 21 / Sprin
 
 A synthetic scanner export is included at `samples/example-scanner-export.txt` for a first upload. It contains no VIN or personal vehicle data.
 
+## Live frontend preview
+
+The GitHub Pages site publishes the React interface from `frontend/` on pushes to `main`. GitHub Pages is static hosting: the sign-in form is disabled in the preview because this repository's Spring Boot API, MySQL database, and Redis cache are not running on Pages. Deploy the full stack with Docker Compose or a separate container host to enable accounts, scans, reports, and AI features.
+
 ## Requirements
 
 For the full container setup, install Docker Desktop with Docker Compose. For a split local setup, install Java 21, Node.js 22+, MySQL 8.4, and Redis 7. The Maven wrapper downloads Maven 3.9.9 on first use. A compatible diagnostic data provider is needed for resolved DTC details; OpenAI API access is optional.

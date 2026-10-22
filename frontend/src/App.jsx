@@ -19,6 +19,7 @@ const navItems = [
 ]
 
 const cx = (...parts) => parts.filter(Boolean).join(' ')
+const staticPreview = import.meta.env.VITE_STATIC_PREVIEW === 'true'
 
 function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem('obd.accessToken'))
@@ -103,12 +104,13 @@ function AuthScreen({ onAuthenticated }) {
           <div className="auth-kicker"><Shield size={15} /> SECURE DIAGNOSTIC WORKSPACE</div>
           <h2>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h2>
           <p className="auth-subtitle">{mode === 'login' ? 'Sign in to continue to your garage.' : 'Start building a clearer picture of your vehicles.'}</p>
+          {staticPreview && <div className="preview-notice" role="status"><strong>Live frontend preview</strong><span>GitHub Pages hosts the interface. Sign-in, scans, saved reports, and AI need the API and data services to be deployed separately.</span><a href="https://github.com/mdshazeb9963-code/obd-ai-diagnostic-center#start-the-full-stack">Setup instructions</a></div>}
           <form onSubmit={(event) => { event.preventDefault(); setFormError(''); const fd = new FormData(event.currentTarget); mutation.mutate({ email: fd.get('email'), password: fd.get('password'), displayName: fd.get('name') }) }}>
             {mode === 'register' && <label className="field-label">Your name<input name="name" autoComplete="name" placeholder="Alex Morgan" required minLength="2" /></label>}
             <label className="field-label">Email address<input name="email" type="email" autoComplete="email" placeholder="you@example.com" required /></label>
             <label className="field-label">Password<input name="password" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder="At least 10 characters" minLength="10" required /></label>
             {formError && <div className="form-error"><TriangleAlert size={16} />{formError}</div>}
-            <button className="button button-primary auth-submit" type="submit" disabled={mutation.isPending}>{mutation.isPending ? <span className="spinner" /> : <>{mode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17} /></>}</button>
+            <button className="button button-primary auth-submit" type="submit" disabled={staticPreview || mutation.isPending}>{staticPreview ? <>API not connected <ArrowRight size={17} /></> : mutation.isPending ? <span className="spinner" /> : <>{mode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={17} /></>}</button>
           </form>
           <div className="auth-switch">{mode === 'login' ? 'New to the garage?' : 'Already have an account?'} <button onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setFormError('') }}>{mode === 'login' ? 'Create account' : 'Sign in'}</button></div>
           <div className="auth-security"><LockKeyhole size={14} /> Your diagnostic records are private and encrypted in transit.</div>
