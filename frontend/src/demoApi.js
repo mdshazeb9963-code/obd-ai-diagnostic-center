@@ -19,6 +19,9 @@ function readList(name) {
       return {
         ...report,
         vehicleMake,
+        vehicleName: report.vehicleName === 'Vehicle details not provided' && vehicleMake
+          ? `${vehicleMake} · model/year not provided`
+          : report.vehicleName,
         diagnostics: (report.diagnostics || []).map((item) => enrichDiagnostic(item, { make: vehicleMake })),
       }
     })
