@@ -94,6 +94,64 @@ describe('OBD AI workspace journeys', () => {
     expect(screen.getByText(/arrange prompt inspection by a qualified Toyota\/brake technician/i)).toBeInTheDocument()
   })
 
+  it('reads only the selected code explanation and lets the mechanic stop or switch playback', async () => {
+    const user = userEvent.setup()
+    const originalSpeechDescriptor = Object.getOwnPropertyDescriptor(window, 'speechSynthesis')
+    const synthesis = { speak: vi.fn(), cancel: vi.fn() }
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: synthesis })
+    vi.stubGlobal('SpeechSynthesisUtterance', class MockUtterance {
+      constructor(text) { this.text = text }
+    })
+    api.get.mockImplementation((url) => {
+      if (url === '/auth/me') return Promise.resolve({ data: { id: 'local-demo', displayName: 'Guest demo', role: 'USER' } })
+      if (url === '/subscriptions/me') return Promise.resolve({ data: { planCode: 'DEMO', scansUsed: 1, scanLimit: -1 } })
+      if (url === '/reports') return Promise.resolve({ data: [{
+        id: 'toyota-speech-report',
+        fileName: 'TOYOTA_speech-scan.txt',
+        vehicleName: 'Toyota · model/year not provided',
+        createdAt: '2026-10-22T10:00:00Z',
+        diagnostics: [
+          { code: 'C1241', severity: 'UNKNOWN' },
+          { code: 'C1256', severity: 'UNKNOWN' },
+        ],
+      }] })
+      if (url === '/vehicles') return Promise.resolve({ data: [] })
+      return Promise.resolve({ data: [] })
+    })
+    const view = mount({ demoMode: true })
+
+    try {
+      await user.click(screen.getByRole('button', { name: 'Reports' }))
+      await screen.findByRole('heading', { name: 'Diagnostic reports' })
+      const reportTable = await screen.findByRole('table')
+      await user.click(within(reportTable).getByText('TOYOTA_speech-scan.txt').closest('tr'))
+
+      const lowVoltageButton = await screen.findByRole('button', { name: 'Listen to C1241 explanation' })
+      const accumulatorButton = screen.getByRole('button', { name: 'Listen to C1256 explanation' })
+      await user.click(lowVoltageButton)
+      expect(lowVoltageButton).toHaveAttribute('aria-pressed', 'true')
+      expect(synthesis.speak).toHaveBeenCalledTimes(1)
+      expect(synthesis.speak.mock.calls[0][0].text).toContain('Low or abnormally high battery-positive voltage')
+      expect(synthesis.speak.mock.calls[0][0].text).not.toContain('Accumulator low pressure')
+
+      await user.click(accumulatorButton)
+      expect(lowVoltageButton).toHaveAttribute('aria-pressed', 'false')
+      expect(accumulatorButton).toHaveAttribute('aria-pressed', 'true')
+      expect(synthesis.speak).toHaveBeenCalledTimes(2)
+      expect(synthesis.speak.mock.calls[1][0].text).toContain('Accumulator low pressure')
+      expect(synthesis.speak.mock.calls[1][0].text).not.toContain('Low or abnormally high battery-positive voltage')
+
+      await user.click(screen.getByRole('button', { name: 'Stop listening to C1256 explanation' }))
+      expect(synthesis.cancel).toHaveBeenCalled()
+      expect(accumulatorButton).toHaveAttribute('aria-pressed', 'false')
+    } finally {
+      view.unmount()
+      if (originalSpeechDescriptor) Object.defineProperty(window, 'speechSynthesis', originalSpeechDescriptor)
+      else delete window.speechSynthesis
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('signs in, navigates to upload, validates a file, and saves the resulting report', async () => {
     const user = userEvent.setup()
     api.post.mockResolvedValueOnce({ data: { accessToken: 'test-access', user: { id: 'u1', role: 'USER' } } })

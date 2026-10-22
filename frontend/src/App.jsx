@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   Activity, ArrowRight, Bell, BookOpen, CarFront, Check,
   ChevronDown, CircleHelp, Clock3, CloudUpload, Download, FileClock, FileText, Gauge,
   LayoutDashboard, LockKeyhole, LogOut, Menu, MessageCircle, Search, Settings, Shield,
-  Sparkles, Trash2, TriangleAlert, Upload, Wrench, X, Zap,
+  Sparkles, Square, Trash2, TriangleAlert, Upload, Volume2, Wrench, X, Zap,
 } from 'lucide-react'
 import { errorMessage, http } from './api.js'
 import { enrichDiagnostic, inferVehicleMake } from './dtcReference.js'
@@ -389,12 +389,150 @@ function ComparePanel({reports,onBack}) {
 
 function ReportDetail({ report, onBack, onDownload }) {
   const vehicleMake = report.vehicleMake || inferVehicleMake(`${report.fileName || ''} ${report.vehicleName || ''}`)
-  return <div className="report-detail"><div className="detail-toolbar"><button className="quiet-button" onClick={onBack}>← Back to reports</button><button className="button button-secondary" onClick={onDownload}><Download size={15} /> Download PDF</button></div><section className="panel detail-hero"><div><span className="eyebrow">DIAGNOSTIC REPORT</span><h2>{report.vehicleName || report.fileName || 'OBD scan'}</h2><p>{report.fileName} · {report.createdAt ? new Date(report.createdAt).toLocaleString() : ''}</p></div><div className="detail-score"><span>HEALTH SCORE</span><strong>{report.healthScore ?? '—'}<small>{report.healthScore == null ? '' : '/100'}</small></strong></div></section>{report.summary && <section className="panel detail-summary"><span className="eyebrow">TECHNICAL SUMMARY</span><p>{report.summary}</p></section>}<section className="panel findings-panel"><div className="panel-heading"><div><span className="eyebrow">CODE FINDINGS</span><h2>{report.diagnostics?.length || 0} detected codes</h2></div></div>{report.diagnostics?.length ? <div className="finding-list">{report.diagnostics.map((d) => <Finding key={d.code} item={d} vehicleMake={vehicleMake} />)}</div> : <div className="small-empty"><strong>No valid DTC codes found</strong><span>Vehicle metadata and raw scan details are still included in the saved report.</span></div>}</section>{report.aiAnalysis && <section className="panel detail-summary"><span className="eyebrow"><Sparkles size={13} /> AI MECHANIC ANALYSIS</span><p>{report.aiAnalysis}</p></section>}</div>
+  const [speakingId, setSpeakingId] = useState(null)
+  const [speechMessage, setSpeechMessage] = useState(null)
+  const utteranceRef = useRef(null)
+  const activeSpeechIdRef = useRef(null)
+
+  useEffect(() => () => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) window.speechSynthesis.cancel()
+    utteranceRef.current = null
+    activeSpeechIdRef.current = null
+  }, [])
+
+  const toggleSpeech = (finding, speechId) => {
+    const synthesis = window.speechSynthesis
+    const Utterance = window.SpeechSynthesisUtterance
+    if (!synthesis || !Utterance) {
+      setSpeechMessage({ id: speechId, text: 'Audio playback is not available in this browser.' })
+      return
+    }
+
+    setSpeechMessage(null)
+    if (activeSpeechIdRef.current === speechId) {
+      synthesis.cancel()
+      utteranceRef.current = null
+      activeSpeechIdRef.current = null
+      setSpeakingId(null)
+      return
+    }
+
+    synthesis.cancel()
+    const text = [
+      `${finding.code}. ${finding.title || 'Diagnostic trouble code.'}`,
+      finding.description,
+      finding.causes?.length ? `Possible causes, not confirmed: ${finding.causes.join('. ')}` : '',
+      finding.nextStep ? `What to do next: ${finding.nextStep}` : '',
+    ].filter(Boolean).join('. ')
+    const utterance = new Utterance(text)
+    utterance.lang = 'en-US'
+    utterance.onend = () => {
+      if (utteranceRef.current !== utterance) return
+      utteranceRef.current = null
+      activeSpeechIdRef.current = null
+      setSpeakingId(null)
+    }
+    utterance.onerror = () => {
+      if (utteranceRef.current !== utterance) return
+      utteranceRef.current = null
+      activeSpeechIdRef.current = null
+      setSpeakingId(null)
+      setSpeechMessage({ id: speechId, text: 'Audio could not be played. Check your browser sound settings and try again.' })
+    }
+
+    utteranceRef.current = utterance
+    activeSpeechIdRef.current = speechId
+    setSpeakingId(speechId)
+    try {
+      synthesis.speak(utterance)
+    } catch {
+      utteranceRef.current = null
+      activeSpeechIdRef.current = null
+      setSpeakingId(null)
+      setSpeechMessage({ id: speechId, text: 'Audio could not be played. Check your browser sound settings and try again.' })
+    }
+  }
+
+  return (
+    <div className="report-detail">
+      <div className="detail-toolbar">
+        <button className="quiet-button" onClick={onBack}>← Back to reports</button>
+        <button className="button button-secondary" onClick={onDownload}><Download size={15} /> Download PDF</button>
+      </div>
+      <section className="panel detail-hero">
+        <div>
+          <span className="eyebrow">DIAGNOSTIC REPORT</span>
+          <h2>{report.vehicleName || report.fileName || 'OBD scan'}</h2>
+          <p>{report.fileName} · {report.createdAt ? new Date(report.createdAt).toLocaleString() : ''}</p>
+        </div>
+        <div className="detail-score">
+          <span>HEALTH SCORE</span>
+          <strong>{report.healthScore ?? '—'}<small>{report.healthScore == null ? '' : '/100'}</small></strong>
+        </div>
+      </section>
+      {report.summary && <section className="panel detail-summary"><span className="eyebrow">TECHNICAL SUMMARY</span><p>{report.summary}</p></section>}
+      <section className="panel findings-panel">
+        <div className="panel-heading">
+          <div><span className="eyebrow">CODE FINDINGS</span><h2>{report.diagnostics?.length || 0} detected codes</h2></div>
+        </div>
+        {report.diagnostics?.length ? (
+          <div className="finding-list">
+            {report.diagnostics.map((item, index) => {
+              const speechId = `${item.code}-${index}`
+              return <Finding
+                key={speechId}
+                item={item}
+                vehicleMake={vehicleMake}
+                speechId={speechId}
+                speaking={speakingId === speechId}
+                speechMessage={speechMessage?.id === speechId ? speechMessage.text : ''}
+                onListen={toggleSpeech}
+              />
+            })}
+          </div>
+        ) : (
+          <div className="small-empty">
+            <strong>No valid DTC codes found</strong>
+            <span>Vehicle metadata and raw scan details are still included in the saved report.</span>
+          </div>
+        )}
+      </section>
+      {report.aiAnalysis && <section className="panel detail-summary"><span className="eyebrow"><Sparkles size={13} /> AI MECHANIC ANALYSIS</span><p>{report.aiAnalysis}</p></section>}
+    </div>
+  )
 }
 
-function Finding({ item, vehicleMake }) {
+function Finding({ item, vehicleMake, speechId, speaking, speechMessage, onListen }) {
   const finding = enrichDiagnostic(item, { make: vehicleMake })
-  return <article className="finding-card"><div className="finding-top"><code>{finding.code}</code><Severity severity={finding.severity} /><span className="confidence">Confidence {finding.confidence == null ? 'unavailable' : Math.round(finding.confidence * 100) + '%'}</span></div><h3>{finding.title}</h3><p>{finding.description}</p>{finding.causes?.length > 0 && <div className="finding-causes"><strong>Possible causes (not confirmed)</strong><span>{finding.causes.join(' · ')}</span></div>}{finding.nextStep && <div className="finding-next-step"><strong>What to do next</strong><span>{finding.nextStep}</span></div>}<div className="finding-meta"><span><Shield size={14} />{finding.drivingRecommendation || 'Have the code and vehicle symptoms verified before making repair decisions.'}</span>{finding.source && <span>Reference: {finding.sourceUrl ? <a href={finding.sourceUrl} target="_blank" rel="noreferrer">{finding.source}</a> : finding.source}</span>}</div></article>
+  return (
+    <article className="finding-card">
+      <div className="finding-top">
+        <code>{finding.code}</code>
+        <Severity severity={finding.severity} />
+        <span className="confidence">Confidence {finding.confidence == null ? 'unavailable' : Math.round(finding.confidence * 100) + '%'}</span>
+        <button
+          type="button"
+          className="listen-button"
+          onClick={() => onListen(finding, speechId)}
+          aria-label={`${speaking ? 'Stop listening to' : 'Listen to'} ${finding.code} explanation`}
+          aria-pressed={speaking}
+          title={speaking ? 'Stop listening' : 'Listen to this code explanation'}
+        >
+          {speaking ? <Square size={13} fill="currentColor" /> : <Volume2 size={15} />}
+          <span>{speaking ? 'Stop' : 'Listen'}</span>
+        </button>
+      </div>
+      <h3>{finding.title}</h3>
+      <p>{finding.description}</p>
+      {finding.causes?.length > 0 && <div className="finding-causes"><strong>Possible causes (not confirmed)</strong><span>{finding.causes.join(' · ')}</span></div>}
+      {finding.nextStep && <div className="finding-next-step"><strong>What to do next</strong><span>{finding.nextStep}</span></div>}
+      {speechMessage && <div className="speech-message" role="status">{speechMessage}</div>}
+      <div className="finding-meta">
+        <span><Shield size={14} />{finding.drivingRecommendation || 'Have the code and vehicle symptoms verified before making repair decisions.'}</span>
+        {finding.source && <span>Reference: {finding.sourceUrl ? <a href={finding.sourceUrl} target="_blank" rel="noreferrer">{finding.source}</a> : finding.source}</span>}
+      </div>
+    </article>
+  )
 }
 
 function Severity({ severity }) {
