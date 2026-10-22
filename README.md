@@ -18,7 +18,9 @@ A synthetic scanner export is included at `samples/example-scanner-export.txt` f
 
 ## Live frontend preview
 
-The GitHub Pages site publishes the React interface from `frontend/` on pushes to `main`. GitHub Pages is static hosting: the sign-in form is disabled in the preview because this repository's Spring Boot API, MySQL database, and Redis cache are not running on Pages. Deploy the full stack with Docker Compose or a separate container host to enable accounts, scans, reports, and AI features.
+The GitHub Pages site publishes an interactive, no-login browser demo from `frontend/` on pushes to `main`. In this mode, scanner text is parsed locally; reports, vehicles, and service notes are stored in that browser's local storage. The demo does not send uploaded text to a server. Clearing the browser's site data removes demo records.
+
+The browser demo extracts DTC-shaped codes but does not claim their meaning, severity, cause, or repair. Its sample scan is synthetic. VIN decoding, account sync, verified diagnostic-provider results, and AI responses require connected services and are not part of the static demo. Run the Docker Compose full stack below to exercise the Spring API, MySQL, and Redis locally; configure optional diagnostic and AI providers for those features.
 
 ## Requirements
 

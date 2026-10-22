@@ -10,9 +10,9 @@ vi.mock('./api.js', () => ({
 }))
 import App from './App.jsx'
 
-function mount() {
+function mount(props = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  return render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><App {...props} /></QueryClientProvider>)
 }
 
 describe('OBD AI workspace journeys', () => {
@@ -36,6 +36,32 @@ describe('OBD AI workspace journeys', () => {
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Your name')).not.toBeInTheDocument()
+  })
+
+  it('opens directly into the no-login browser demo and loads a sample report', async () => {
+    const user = userEvent.setup()
+    let reports = []
+    api.get.mockImplementation((url) => {
+      if (url === '/auth/me') return Promise.resolve({ data: { id: 'local-demo', displayName: 'Guest demo', role: 'USER' } })
+      if (url === '/subscriptions/me') return Promise.resolve({ data: { planCode: 'DEMO', scansUsed: reports.length, scanLimit: -1 } })
+      if (url === '/reports') return Promise.resolve({ data: reports })
+      if (url === '/vehicles') return Promise.resolve({ data: [] })
+      return Promise.resolve({ data: [] })
+    })
+    api.post.mockImplementation((url) => {
+      if (url === '/demo/sample') {
+        reports = [{ id: 'sample-1', fileName: 'sample-scanner-export.txt', vehicleName: 'Example vehicle (sample)', createdAt: '2026-10-22T10:00:00Z', diagnostics: [{ code: 'P0300', severity: 'UNKNOWN' }], healthScore: null }]
+        return Promise.resolve({ data: reports[0] })
+      }
+      return Promise.resolve({ data: {} })
+    })
+    mount({ demoMode: true })
+    expect(await screen.findByRole('heading', { name: 'Explore the diagnostic center.' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('NO-LOGIN BROWSER DEMO')
+    expect(screen.queryByRole('heading', { name: 'Welcome back' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Try sample scan' }))
+    expect(await screen.findByText('sample-scanner-export.txt')).toBeInTheDocument()
+    expect(api.post).toHaveBeenCalledWith('/demo/sample')
   })
 
   it('signs in, navigates to upload, validates a file, and saves the resulting report', async () => {

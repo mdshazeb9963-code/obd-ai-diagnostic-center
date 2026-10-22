@@ -1,10 +1,19 @@
 import axios from 'axios'
 
+const staticPreview = import.meta.env.VITE_STATIC_PREVIEW === 'true'
+
 export const http = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api/v1',
   timeout: 30_000,
   withCredentials: true,
 })
+
+if (staticPreview) {
+  http.defaults.adapter = async (config) => {
+    const { demoAdapter } = await import('./demoApi.js')
+    return demoAdapter(config)
+  }
+}
 
 http.interceptors.request.use((config) => {
   const token = sessionStorage.getItem('obd.accessToken')

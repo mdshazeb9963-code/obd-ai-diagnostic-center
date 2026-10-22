@@ -21,8 +21,8 @@ const navItems = [
 const cx = (...parts) => parts.filter(Boolean).join(' ')
 const staticPreview = import.meta.env.VITE_STATIC_PREVIEW === 'true'
 
-function App() {
-  const [token, setToken] = useState(() => sessionStorage.getItem('obd.accessToken'))
+function App({ demoMode = staticPreview } = {}) {
+  const [token, setToken] = useState(() => demoMode ? 'local-demo' : sessionStorage.getItem('obd.accessToken'))
   const [page, setPage] = useState('home')
   const [mobileNav, setMobileNav] = useState(false)
   const [notice, setNotice] = useState('')
@@ -50,21 +50,22 @@ function App() {
   if (!token) return <AuthScreen onAuthenticated={onAuthenticated} />
   return (
     <div className="app-shell">
-      <Sidebar active={page} onChange={(id) => { setPage(id); setMobileNav(false) }} onLogout={logout} mobile={mobileNav} user={accountQuery.data} subscription={subscriptionQuery.data} />
+      <Sidebar active={page} onChange={(id) => { setPage(id); setMobileNav(false) }} onLogout={logout} mobile={mobileNav} user={accountQuery.data} subscription={subscriptionQuery.data} demoMode={demoMode} />
       {mobileNav && <button className="mobile-scrim" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}
       <main className="main-shell">
-      <Topbar onMenu={() => setMobileNav(true)} onNavigate={setPage} />
+      <Topbar onMenu={() => setMobileNav(true)} onNavigate={setPage} demoMode={demoMode} />
+        {demoMode && <div className="demo-banner" role="status"><strong>NO-LOGIN BROWSER DEMO</strong><span>Changes stay in this browser. Codes are extracted from uploaded text; diagnostic details are unverified without a provider.</span></div>}
         <div className="page-wrap">
           <AnimatePresence mode="wait">
             <motion.div key={page} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.18 }}>
-              {page === 'home' && <Overview onNavigate={setPage} />}
-              {page === 'upload' && <UploadPage onSaved={() => { setNotice('Diagnostic report saved to your history.'); queryClient.invalidateQueries({ queryKey: ['reports'] }); setPage('reports') }} />}
+              {page === 'home' && <Overview onNavigate={setPage} demoMode={demoMode} />}
+              {page === 'upload' && <UploadPage demoMode={demoMode} onSaved={() => { setNotice('Diagnostic report saved to your history.'); queryClient.invalidateQueries({ queryKey: ['reports'] }); setPage('reports') }} />}
               {page === 'garage' && <Garage />}
-              {page === 'reports' && <Reports />}
-              {page === 'history' && <Reports history />}
-              {page === 'assistant' && <Assistant />}
+              {page === 'reports' && <Reports demoMode={demoMode} />}
+              {page === 'history' && <Reports history demoMode={demoMode} />}
+              {page === 'assistant' && <Assistant demoMode={demoMode} />}
               {page === 'notifications' && <Notifications />}
-              {page === 'settings' && <SettingsPage />}
+              {page === 'settings' && <SettingsPage demoMode={demoMode} />}
               {page === 'admin' && <AdminPage />}
             </motion.div>
           </AnimatePresence>
@@ -125,12 +126,12 @@ function Brand() {
   return <div className="brand"><div className="brand-mark"><Activity size={19} strokeWidth={2.4} /></div><div><strong>OBD<span>AI</span></strong><small>DIAGNOSTIC CENTER</small></div></div>
 }
 
-function Sidebar({ active, onChange, onLogout, mobile, user, subscription }) {
+function Sidebar({ active, onChange, onLogout, mobile, user, subscription, demoMode = false }) {
   return <aside className={cx('sidebar', mobile && 'sidebar-open')}>
     <div className="sidebar-top"><Brand /><button className="sidebar-close icon-button" aria-label="Close navigation" onClick={() => onChange(active)}><X size={18} /></button></div>
-    <div className="workspace-label">WORKSPACE <span>● PERSONAL</span></div>
+    <div className="workspace-label">WORKSPACE <span>● {demoMode ? 'DEMO' : 'PERSONAL'}</span></div>
     <nav aria-label="Main navigation">
-      {navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => onChange(id)} className={cx('nav-item', active === id && 'nav-active')} aria-current={active === id ? 'page' : undefined}><Icon size={18} strokeWidth={1.8} /><span>{label}</span>{id === 'upload' && <span className="nav-plus" aria-hidden="true">+</span>}</button>)}
+      {navItems.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => onChange(id)} className={cx('nav-item', active === id && 'nav-active')} aria-current={active === id ? 'page' : undefined}><Icon size={18} strokeWidth={1.8} /><span>{demoMode && id === 'assistant' ? 'Demo guidance' : label}</span>{id === 'upload' && <span className="nav-plus" aria-hidden="true">+</span>}</button>)}
       {user?.role === 'ADMIN' && <button className={cx('nav-item', active === 'admin' && 'nav-active')} onClick={() => onChange('admin')}><Settings size={18}/><span>Admin panel</span></button>}
     </nav>
     <div className="sidebar-divider" />
@@ -140,16 +141,18 @@ function Sidebar({ active, onChange, onLogout, mobile, user, subscription }) {
       <button className={cx('nav-item', active === 'settings' && 'nav-active')} onClick={() => onChange('settings')}><Settings size={18} /><span>Account settings</span></button>
     </nav>
     <div className="sidebar-spacer" />
-    <button className="plan-card plan-card-button" onClick={() => onChange('settings')}><div className="plan-icon"><Zap size={15} fill="currentColor" /></div><div><strong>{subscription?.planCode || 'Plan'} workspace</strong><small>{subscription ? subscription.scansUsed+' / '+(subscription.scanLimit<0?'∞':subscription.scanLimit)+' scans this month' : 'View plan and usage'}</small></div><ArrowRight size={14} /></button>
-    <div className="profile-row"><div className="avatar">OD</div><div className="profile-copy"><strong>My account</strong><small>Personal workspace</small></div><button className="icon-button" aria-label="Sign out" onClick={onLogout}><LogOut size={16} /></button></div>
+    <button className="plan-card plan-card-button" onClick={() => onChange('settings')}><div className="plan-icon"><Zap size={15} fill="currentColor" /></div><div><strong>{demoMode ? 'Browser demo' : `${subscription?.planCode || 'Plan'} workspace`}</strong><small>{demoMode ? `${subscription?.scansUsed || 0} scans saved on this device` : subscription ? subscription.scansUsed+' / '+(subscription.scanLimit<0?'∞':subscription.scanLimit)+' scans this month' : 'View plan and usage'}</small></div><ArrowRight size={14} /></button>
+    <div className="profile-row"><div className="avatar">{demoMode ? 'DE' : 'OD'}</div><div className="profile-copy"><strong>{demoMode ? 'Guest demo' : 'My account'}</strong><small>{demoMode ? 'Saved in this browser' : 'Personal workspace'}</small></div>{!demoMode && <button className="icon-button" aria-label="Sign out" onClick={onLogout}><LogOut size={16} /></button>}</div>
   </aside>
 }
 
-function Topbar({ onMenu, onNavigate }) {
-  return <header className="topbar"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={onMenu}><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>Diagnostic center</strong></div><div className="topbar-actions"><div className="system-live"><span /> Private workspace</div><button className="top-icon" aria-label="Search reports" title="Search reports" onClick={() => onNavigate('reports')}><Search size={17} /></button><button className="top-icon notification-icon" aria-label="Notifications" title="Notifications" onClick={() => onNavigate('notifications')}><Bell size={17} /><i /></button><button className="top-avatar top-avatar-button" aria-label="Account settings" onClick={() => onNavigate('settings')}>OD</button></div></header>
+function Topbar({ onMenu, onNavigate, demoMode = false }) {
+  return <header className="topbar"><button className="icon-button mobile-menu" aria-label="Open navigation" onClick={onMenu}><Menu size={20} /></button><div className="breadcrumbs"><span>Workspace</span><span className="crumb-slash">/</span><strong>Diagnostic center</strong></div><div className="topbar-actions"><div className="system-live"><span /> {demoMode ? 'Browser demo' : 'Private workspace'}</div><button className="top-icon" aria-label="Search reports" title="Search reports" onClick={() => onNavigate('reports')}><Search size={17} /></button><button className="top-icon notification-icon" aria-label="Notifications" title="Notifications" onClick={() => onNavigate('notifications')}><Bell size={17} /><i /></button><button className="top-avatar top-avatar-button" aria-label="Account settings" onClick={() => onNavigate('settings')}>{demoMode ? 'DE' : 'OD'}</button></div></header>
 }
 
-function Overview({ onNavigate }) {
+function Overview({ onNavigate, demoMode = false }) {
+  const queryClient = useQueryClient()
+  const sample = useMutation({ mutationFn: async () => (await http.post('/demo/sample')).data, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reports'] }) })
   const reportsQuery = useQuery({ queryKey: ['reports'], queryFn: async () => (await http.get('/reports', { params: { limit: 8 } })).data })
   const vehiclesQuery = useQuery({ queryKey: ['vehicles'], queryFn: async () => (await http.get('/vehicles')).data })
   const reports = Array.isArray(reportsQuery.data) ? reportsQuery.data : reportsQuery.data?.items || []
@@ -159,7 +162,7 @@ function Overview({ onNavigate }) {
   const scoredReports = reports.filter((r) => r.healthScore != null)
   const average = scoredReports.length ? Math.round(scoredReports.reduce((sum, r) => sum + r.healthScore, 0) / scoredReports.length) : null
   return <div className="content">
-    <div className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-dot" /> YOUR GARAGE AT A GLANCE</div><h1>Good to have you back.</h1><p>Here’s what’s happening across your vehicles.</p></div><button className="button button-primary" onClick={() => onNavigate('upload')}><Upload size={16} /> Run a diagnostic</button></div>
+    <div className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-dot" /> {demoMode ? 'NO ACCOUNT NEEDED' : 'YOUR GARAGE AT A GLANCE'}</div><h1>{demoMode ? 'Explore the diagnostic center.' : 'Good to have you back.'}</h1><p>{demoMode ? 'Upload your own text scan or try the sample report.' : 'Here’s what’s happening across your vehicles.'}</p></div><div className="welcome-actions">{demoMode && <button className="button button-secondary" onClick={() => sample.mutate()} disabled={sample.isPending}>{sample.isPending ? <span className="spinner" /> : <FileText size={15} />} Try sample scan</button>}<button className="button button-primary" onClick={() => onNavigate('upload')}><Upload size={16} /> Run a diagnostic</button></div></div>
     {(reportsQuery.isError || vehiclesQuery.isError) && <InlineError message="Your workspace data could not be loaded. Check your connection, then refresh." />}
     <div className="metric-grid">
       <MetricCard icon={CarFront} label="Vehicles in garage" value={vehiclesQuery.isLoading ? '—' : vehicles.length} note="Saved to your workspace" tone="green" />
@@ -210,7 +213,7 @@ function HealthBadge({ score }) {
 }
 function StatusPill({ status }) { return <span className={cx('status-pill', status === 'Critical' ? 'critical' : status === 'Review' ? 'review' : 'neutral')}><i />{status}</span> }
 
-function UploadPage({ onSaved }) {
+function UploadPage({ onSaved, demoMode = false }) {
   const [file, setFile] = useState(null)
   const [drag, setDrag] = useState(false)
   const [error, setError] = useState('')
@@ -232,7 +235,7 @@ function UploadPage({ onSaved }) {
   }
   const onDrop = (event) => { event.preventDefault(); setDrag(false); choose(event.dataTransfer.files?.[0]) }
   return <div className="content narrow-content">
-    <PageIntro eyebrow="NEW DIAGNOSTIC" title="Upload a scanner export" description="Bring your OBD report in. We’ll extract codes, identify vehicle details when present, and build a traceable diagnostic report." />
+    <PageIntro eyebrow="NEW DIAGNOSTIC" title="Upload a scanner export" description={demoMode ? 'Extract code-shaped text from a scanner export in this browser. This demo does not verify code meanings or repairs.' : 'Bring your OBD report in. We’ll extract codes, identify vehicle details when present, and build a traceable diagnostic report.'} />
     {completed ? <div className="panel upload-result"><div className="result-check"><Check size={24} /></div><span className="eyebrow">SCAN PROCESSED</span><h2>Your report is ready</h2><p>{completed.diagnostics?.length || 0} diagnostic codes extracted from <strong>{completed.fileName || file?.name}</strong>.</p><div className="result-meta"><span><FileText size={15} /> {completed.vehicleName || 'Vehicle details unavailable'}</span><span><Clock3 size={15} /> {new Date(completed.createdAt || Date.now()).toLocaleString()}</span></div><div className="result-actions"><button className="button button-primary" onClick={onSaved}>Open report history <ArrowRight size={16} /></button><button className="button button-ghost" onClick={() => { setCompleted(null); setFile(null) }}>Upload another</button></div></div> : <>
       <div className="upload-steps"><div className="step active"><span>01</span><div><strong>Choose file</strong><small>Scanner export</small></div></div><div className="step-line" /><div className="step"><span>02</span><div><strong>Review scan</strong><small>Codes & vehicle</small></div></div><div className="step-line" /><div className="step"><span>03</span><div><strong>Get your report</strong><small>Recommendations</small></div></div></div>
       <div className={cx('dropzone', drag && 'dropzone-active', file && 'dropzone-file')} onDragOver={(e) => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)} onDrop={onDrop}>
@@ -242,7 +245,7 @@ function UploadPage({ onSaved }) {
       </div>
       {error && <div className="form-error"><TriangleAlert size={16} />{error}</div>}
       <div className="supported-card"><div className="supported-icon"><Activity size={19} /></div><div><strong>Made for scanner exports</strong><p>Torque Pro, Car Scanner, OBD Fusion, BlueDriver, ELM327 logs, manufacturer tools and custom text exports. Unknown layouts are scanned for valid DTCs.</p></div><button title="Supported formats" aria-label="About supported formats"><CircleHelp size={16} /></button></div>
-      <div className="privacy-line"><LockKeyhole size={14} /> Files are validated on upload and are only visible within your account.</div>
+      <div className="privacy-line"><LockKeyhole size={14} />{demoMode ? 'The file is read in your browser. Only extracted codes and report details are saved on this device.' : 'Files are validated on upload and are only visible within your account.'}</div>
       <div className="upload-footer"><button className="button button-ghost" onClick={() => setFile(null)} disabled={!file || mutation.isPending}>Clear selection</button><button className="button button-primary" disabled={!file || mutation.isPending} onClick={() => { setError(''); mutation.mutate() }}>{mutation.isPending ? <><span className="spinner" /> Analyzing scan…</> : <>Analyze file <ArrowRight size={16} /></>}</button></div>
     </>}
   </div>
@@ -311,7 +314,7 @@ function MaintenancePanel({vehicle}) {
   </section>
 }
 
-function Reports({ history = false }) {
+function Reports({ history = false, demoMode = false }) {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState(null)
   const [compareMode, setCompareMode] = useState(false)
@@ -332,7 +335,7 @@ function Reports({ history = false }) {
     {selected ? <ReportDetail report={selected} onBack={() => setSelected(null)} onDownload={() => download(selected)} /> : compareMode && selectedIds.length===2 ? <ComparePanel reports={reports.filter(r=>selectedIds.includes(r.id))} onBack={()=>{setSelectedIds([]);setCompareMode(false)}}/> : <>
       <div className="list-toolbar"><label className="search-field"><Search size={16} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search reports, vehicles or codes" /></label><div className="toolbar-tools"><div className="toolbar-result">{filtered.length} {filtered.length === 1 ? 'report' : 'reports'}</div>{reports.length>1&&<button className={cx('button',compareMode?'button-primary':'button-secondary','compare-toggle')} onClick={()=>{setCompareMode(!compareMode);setSelectedIds([])}}>{compareMode?'Cancel compare':'Compare scans'}{compareMode&&selectedIds.length>0?' · '+selectedIds.length+'/2':''}</button>}</div></div>
       {compareMode&&selectedIds.length<2&&<div className="compare-hint"><Activity size={15}/><span>Select two rows to compare their health scores and detected code sets.</span></div>}
-      {query.isError ? <InlineError message="Reports could not be loaded." /> : query.isLoading ? <div className="panel"><LoadingRows /></div> : filtered.length ? <section className="panel report-list-panel"><ReportTable reports={filtered} selectedIds={compareMode?selectedIds:[]} onOpen={compareMode?(report=>setSelectedIds(ids=>ids.includes(report.id)?ids.filter(id=>id!==report.id):ids.length<2?[...ids,report.id]:[ids[1],report.id])):setSelected} onDownload={download} onDelete={(report) => { if (window.confirm('Delete this diagnostic report? This cannot be undone.')) remove.mutate(report.id) }} /><div className="report-bulk-note"><Shield size={14} /> Reports are private to your account. PDF export includes only saved diagnostic data.</div></section> : <EmptyPanel icon={FileText} title={search ? 'No matching reports' : 'No reports yet'} text={search ? 'Try another file name, vehicle, or diagnostic code.' : 'Upload a scanner export to create a searchable report with code findings.'} />}
+      {query.isError ? <InlineError message="Reports could not be loaded." /> : query.isLoading ? <div className="panel"><LoadingRows /></div> : filtered.length ? <section className="panel report-list-panel"><ReportTable reports={filtered} selectedIds={compareMode?selectedIds:[]} onOpen={compareMode?(report=>setSelectedIds(ids=>ids.includes(report.id)?ids.filter(id=>id!==report.id):ids.length<2?[...ids,report.id]:[ids[1],report.id])):setSelected} onDownload={download} onDelete={(report) => { if (window.confirm('Delete this diagnostic report? This cannot be undone.')) remove.mutate(report.id) }} /><div className="report-bulk-note"><Shield size={14} />{demoMode ? 'Reports are saved locally in this browser. PDF export contains extracted codes and unverified demo notes.' : 'Reports are private to your account. PDF export includes only saved diagnostic data.'}</div></section> : <EmptyPanel icon={FileText} title={search ? 'No matching reports' : 'No reports yet'} text={search ? 'Try another file name, vehicle, or diagnostic code.' : 'Upload a scanner export to create a searchable report with code findings.'} />}
     </>}
   </div>
 }
@@ -363,17 +366,17 @@ function Severity({ severity }) {
   return <span className={cx('severity-tag', 'severity-' + value.toLowerCase())}><i />{value === 'UNKNOWN' ? 'UNVERIFIED' : value}</span>
 }
 
-function Assistant() {
+function Assistant({ demoMode = false }) {
   const [text, setText] = useState('')
   const [answer, setAnswer] = useState('')
   const [error, setError] = useState('')
   const mutation = useMutation({ mutationFn: async (question) => (await http.post('/ai/assistant', { message: question })).data, onSuccess: (data) => setAnswer(data.answer), onError: (e) => setError(errorMessage(e, 'AI analysis could not be completed.')) })
-  return <div className="content narrow-content"><PageIntro eyebrow="AI MECHANIC" title="Ask about your scan" description="Get plain-language help grounded in your saved diagnostic reports. AI explanations are advisory and identify when data is missing." />
-    <div className="assistant-notice"><Sparkles size={17} /><div><strong>Source-aware answers</strong><span>The assistant uses your saved scan findings. It won’t claim a code was resolved unless a diagnostic provider supplied that data.</span></div></div>
+  return <div className="content narrow-content"><PageIntro eyebrow={demoMode ? 'DEMO GUIDANCE' : 'AI MECHANIC'} title={demoMode ? 'Review your scan codes' : 'Ask about your scan'} description={demoMode ? 'This browser-only preview does not call an AI service. It can show the codes extracted from your latest local report.' : 'Get plain-language help grounded in your saved diagnostic reports. AI explanations are advisory and identify when data is missing.'} />
+    <div className="assistant-notice"><Sparkles size={17} /><div><strong>{demoMode ? 'Local demo response' : 'Source-aware answers'}</strong><span>{demoMode ? 'No prompt or scan is sent to an AI provider in this demo.' : 'The assistant uses your saved scan findings. It won’t claim a code was resolved unless a diagnostic provider supplied that data.'}</span></div></div>
     <form className="panel assistant-form" onSubmit={(e) => { e.preventDefault(); setError(''); setAnswer(''); mutation.mutate(text.trim()) }}><label className="field-label">What would you like to understand?<textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="For example: Which item in my latest scan should I discuss with a mechanic first?" rows="4" maxLength="1000" required /></label><div className="assistant-form-footer"><span>{text.length}/1000 characters</span><button className="button button-primary" disabled={mutation.isPending || !text.trim()}>{mutation.isPending ? <><span className="spinner" /> Thinking…</> : <><Sparkles size={15} /> Ask assistant</>}</button></div></form>
     {error && <div className="form-error"><TriangleAlert size={16} />{error}</div>}
     {answer && <div className="panel assistant-answer"><span className="eyebrow">ASSISTANT RESPONSE</span><p>{answer}</p><small><Shield size={13} /> Confirm safety-critical decisions with a qualified technician.</small></div>}
-    <div className="assistant-empty"><MessageCircle size={18} /><span>Questions are sent securely to the configured AI provider and are not used as a replacement for professional inspection.</span></div>
+    <div className="assistant-empty"><MessageCircle size={18} /><span>{demoMode ? 'Responses are rule-based demo text, not AI analysis. Verify safety-critical concerns with a qualified technician.' : 'Questions are sent securely to the configured AI provider and are not used as a replacement for professional inspection.'}</span></div>
   </div>
 }
 
@@ -386,12 +389,12 @@ function Notifications() {
     {query.isError?<InlineError message="Notifications could not be loaded."/>:query.isLoading?<div className="panel"><LoadingRows/></div>:rows.length?<div className="panel notification-list">{rows.map(n=><article className={cx('notification-row',!n.readAt&&'unread')} key={n.id}><div className="notification-mark"><Bell size={16}/></div><div className="notification-copy"><strong>{n.title}</strong><span>{n.body}</span><small>{new Date(n.createdAt).toLocaleString()}</small></div><div className="notification-actions">{!n.readAt&&<button className="quiet-button" onClick={()=>change.mutate({id:n.id})}>Mark read</button>}<button className="row-action danger-action" aria-label="Delete notification" onClick={()=>change.mutate({id:n.id,remove:true})}><Trash2 size={14}/></button></div></article>)}</div>:<EmptyPanel icon={Bell} title="You’re all caught up" text="Scan processing and account notifications will appear here when available."/>}
   </div>
 }
-function SettingsPage() {
+function SettingsPage({ demoMode = false }) {
   const query=useQuery({queryKey:['subscription'],queryFn:async()=>(await http.get('/subscriptions/me')).data})
   const sub=query.data
-  return <div className="content"><PageIntro eyebrow="PREFERENCES" title="Account settings" description="Manage your account security and diagnostic preferences." />
+  return <div className="content"><PageIntro eyebrow="PREFERENCES" title={demoMode ? 'Demo settings' : 'Account settings'} description={demoMode ? 'This preview does not create an account or send data to a server.' : 'Manage your account security and diagnostic preferences.'} />
     {query.isError&&<InlineError message="Subscription details could not be loaded."/>}
-    <div className="settings-grid"><section className="panel settings-tile"><div className="settings-tile-icon"><Zap size={18}/></div><h2>{sub?.planCode||'Current plan'} plan</h2><p>{sub?sub.scansUsed+' of '+(sub.scanLimit<0?'unlimited':sub.scanLimit)+' scans used this month.':'Loading plan usage…'}</p><span className="settings-footnote">Plan changes are managed by your workspace administrator.</span></section><section className="panel settings-tile"><div className="settings-tile-icon"><LockKeyhole size={18} /></div><h2>Account security</h2><p>Your session uses short-lived signed access tokens with rotating, secure refresh cookies.</p></section><section className="panel settings-tile"><div className="settings-tile-icon"><BookOpen size={18} /></div><h2>Diagnostic sources</h2><p>Descriptions and repair guidance show their source and confidence when a provider returns verified information.</p></section><section className="panel settings-tile"><div className="settings-tile-icon"><Shield size={18} /></div><h2>Data privacy</h2><p>Your uploaded scan records are associated with your account and protected by ownership checks.</p></section></div>
+    <div className="settings-grid"><section className="panel settings-tile"><div className="settings-tile-icon"><Zap size={18}/></div><h2>{sub?.planCode||'Current plan'} plan</h2><p>{sub?sub.scansUsed+' of '+(sub.scanLimit<0?'unlimited':sub.scanLimit)+' scans used in this demo.':'Loading plan usage…'}</p><span className="settings-footnote">{demoMode ? 'No account or paid plan is attached to this browser demo.' : 'Plan changes are managed by your workspace administrator.'}</span></section><section className="panel settings-tile"><div className="settings-tile-icon"><LockKeyhole size={18} /></div><h2>{demoMode ? 'Browser storage' : 'Account security'}</h2><p>{demoMode ? 'Demo reports and vehicles stay in this browser’s local storage. Clearing site data removes them.' : 'Your session uses short-lived signed access tokens with rotating, secure refresh cookies.'}</p></section><section className="panel settings-tile"><div className="settings-tile-icon"><BookOpen size={18} /></div><h2>Diagnostic sources</h2><p>{demoMode ? 'Detected codes are extracted from text. No verified code definitions or repairs are provided in this preview.' : 'Descriptions and repair guidance show their source and confidence when a provider returns verified information.'}</p></section><section className="panel settings-tile"><div className="settings-tile-icon"><Shield size={18} /></div><h2>{demoMode ? 'Demo privacy' : 'Data privacy'}</h2><p>{demoMode ? 'Uploaded file text is processed in your browser. Saved report details are local to this device.' : 'Your uploaded scan records are associated with your account and protected by ownership checks.'}</p></section></div>
   </div>
 }
 
