@@ -78,17 +78,27 @@ describe('browser demo data adapter', () => {
     expect(byCode.B2312.description).toMatch(/exact component differs by vehicle/i)
   })
 
-  it('upgrades previously saved demo reports with code meanings when they are opened again', async () => {
+  it('replaces legacy unresolved titles with offline meanings without upgrading unknown codes', async () => {
     localStorage.setItem('obd.demo.reports', JSON.stringify([{
       id: 'older-report',
       fileName: 'TOYOTA_old-scan.txt',
-      diagnostics: [{ code: 'C1256', severity: 'UNKNOWN', title: null, description: 'No verified diagnostic provider is connected in this browser demo.', causes: [] }],
+      diagnostics: [
+        { code: 'C1241', severity: 'UNKNOWN', title: 'Code details not resolved', description: 'No verified diagnostic provider is connected in this browser demo.', causes: [] },
+        { code: 'C1256', severity: 'UNKNOWN', title: 'Code details not resolved', description: 'No verified diagnostic provider is connected in this browser demo.', causes: [] },
+        { code: 'C1269', severity: 'UNKNOWN', title: 'Code details not resolved', description: 'No verified diagnostic provider is connected in this browser demo.', causes: [] },
+      ],
     }]))
 
     const listed = await call('get', '/reports')
-    expect(listed.data[0].diagnostics[0].title).toMatch(/Accumulator low pressure/i)
-    expect(listed.data[0].diagnostics[0].causes.length).toBeGreaterThan(0)
-    expect(listed.data[0].diagnostics[0].nextStep).toMatch(/brake/i)
+    const [lowVoltage, accumulator, unknownChassis] = listed.data[0].diagnostics
+    expect(lowVoltage.title).toMatch(/battery-positive voltage/i)
+    expect(lowVoltage.description).toMatch(/skid-control ECU/i)
+    expect(accumulator.title).toMatch(/Accumulator low pressure/i)
+    expect(accumulator.causes.length).toBeGreaterThan(0)
+    expect(accumulator.nextStep).toMatch(/brake/i)
+    expect(unknownChassis.title).toMatch(/manufacturer-specific chassis code/i)
+    expect(unknownChassis.description).toMatch(/not assigned one universal meaning/i)
+    expect(listed.data[0].diagnostics.every((item) => item.severity === 'UNKNOWN')).toBe(true)
   })
 
   it('extracts DTCs from a selectable-text PDF locally', async () => {

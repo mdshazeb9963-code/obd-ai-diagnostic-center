@@ -138,7 +138,7 @@ const TOYOTA_CODES = {
     causes: ['On applicable Toyota 4WD models only: transfer L4 position switch or its circuit', 'The correct cause depends on the vehicle and the module that reported the code'],
     nextStep: 'Check the vehicle make, model, year, and scan-tool module (such as ABS/VSC) against the matching service manual. Do not replace a part based on this example.',
     source: 'Toyota 4Runner service manual example · applicability varies',
-    sourceUrl: 'https://www.toyota-4runner.org/attachments/3rd-gen-t4rs/145120d1423199799-1999-t4r-trouble-code-help-please-05-diagnostics-pdf',
+    sourceUrl: 'https://www.to4runner.net/transfer_l4_position_switch_circuit_c1268_-622.html',
   },
   C1452: {
     title: 'Accumulator pressure below threshold after braking (Toyota brake system example)',
@@ -239,6 +239,7 @@ const TOYOTA_CODES = {
 }
 
 const PLACEHOLDER_TEXT = /no verified diagnostic provider|no verified description|code was extracted from the uploaded text|sample code detected/i
+const PLACEHOLDER_TITLE = /^(?:code details not resolved|code reference not available(?: offline)?|unknown code)$/i
 
 export function inferVehicleMake(text = '') {
   const value = String(text).toLowerCase()
@@ -271,11 +272,13 @@ export function getDtcReference(code, { make } = {}) {
 
 export function enrichDiagnostic(item, options = {}) {
   const reference = getDtcReference(item.code, options)
+  const title = typeof item.title === 'string' ? item.title : ''
   const descriptionIsPlaceholder = !item.description || PLACEHOLDER_TEXT.test(item.description)
+  const titleIsPlaceholder = !title || PLACEHOLDER_TITLE.test(title.trim())
   return {
     ...reference,
     ...item,
-    title: item.title || reference.title,
+    title: titleIsPlaceholder ? reference.title : title,
     description: descriptionIsPlaceholder ? reference.description : item.description,
     causes: item.causes?.length ? item.causes : reference.causes,
     nextStep: item.nextStep || reference.nextStep,
